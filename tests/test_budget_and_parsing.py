@@ -126,18 +126,22 @@ def test_субтитры_srt_читаются_как_и_vtt(tmp_path):
 
 def test_чужой_распознаватель_вызывается_вместо_свифта(tmp_path):
     """--ocr-command закрывает Windows и Linux: договор тот же «путь<TAB>текст»."""
-    import stat
+    import sys
+    import subprocess
+    import shlex
+    import os
 
     from frameproof import ocr
 
-    fake = tmp_path / "ocr.sh"
-    fake.write_text('#!/bin/sh\nfor p in "$@"; do printf "%s\\tтекст с экрана\\n" "$p"; done\n')
-    fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
+    fake = tmp_path / "ocr.py"
+    fake.write_text('import sys\nsys.stdout.reconfigure(encoding="utf-8")\nfor p in sys.argv[1:]: print(p + "\\tтекст с экрана")\n', encoding='utf-8')
+    argv = [sys.executable, str(fake)]
+    command = subprocess.list2cmdline(argv) if os.name == 'nt' else shlex.join(argv)
 
-    assert ocr.available(str(fake)) is True
+    assert ocr.available(command) is True
     assert ocr.available("/несуществующий/бинарник") is False
 
-    got = ocr.recognize(["a.jpg", "b.jpg"], cache_dir=str(tmp_path), command=str(fake))
+    got = ocr.recognize(["a.jpg", "b.jpg"], cache_dir=str(tmp_path), command=command)
     assert got == {"a.jpg": "текст с экрана", "b.jpg": "текст с экрана"}
 
 

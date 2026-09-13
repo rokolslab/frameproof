@@ -37,7 +37,9 @@ def main(пути: list[str]) -> int:
     for путь in пути:
         try:
             r = subprocess.run(
-                [бинарь, путь, "stdout", "-l", ЯЗЫК, "--psm", "6"],
+                [бинарь, путь, "stdout", "-l", ЯЗЫК, "--psm", "6"]
+                + (["--tessdata-dir", os.environ["FRAMEPROOF_TESSDATA"]]
+                   if os.environ.get("FRAMEPROOF_TESSDATA") else []),
                 capture_output=True, timeout=60,
             )
         except subprocess.TimeoutExpired:

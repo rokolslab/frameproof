@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Frameproof — видео и доказательства</title>
+  <link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script>
+</head>
+<body>
+<header><a href="/" class="brand">frameproof<span>●</span></a><span id="host">Подключение к хосту…</span><button disabled type="button" id="shutdown">Завершить приложение</button></header>
+<main>
+  <nav aria-label="Разделы приложения">
+    <button disabled type="button" data-page="create" aria-current="page">Новое видео</button>
+    <button disabled type="button" data-page="library">Обработки</button>
+    <button disabled type="button" data-page="setup">Готовность</button>
+  </nav>
+  <p id="status" role="status" aria-live="polite">Проверяем соединение…</p>
+  <section id="create" class="page">
+    <div class="intro"><p class="eyebrow">РАБОЧЕЕ МЕСТО</p><h1>От видео к нужному моменту</h1><p>Выбери источник, настрой распознавание и получи поиск с проверяемыми кадрами.</p></div>
+    <form id="create-form" novalidate>
+      <div class="columns">
+        <section class="card"><h2>1. Источник видео</h2>
+          <label for="source">Где находится видео</label>
+          <select id="source"><option value="upload">На компьютере с браузером</option><option value="host">На диске хоста</option><option value="url">По ссылке</option></select>
+          <div id="upload-source"><label for="video-file">Выбрать видео для загрузки</label><input id="video-file" type="file" accept=".mp4,.mkv,.mov,.webm,.avi,.m4v,.mpeg,.mpg,.wmv,.ts"><p class="hint">Файл передаётся на хост. До 20 ГиБ; MP4, MKV, MOV, WebM и другие распространённые контейнеры.</p></div>
+          <div id="host-source" hidden><label for="host-path">Путь на хосте</label><div class="row"><input id="host-path" placeholder="Выбери файл из разрешённых папок"><button disabled type="button" id="browse-video">Выбрать на хосте</button></div><p class="hint">Без копирования. Доступны папки, добавленные при запуске через --media-root.</p></div>
+          <div id="url-source" hidden><label for="url">Ссылка на видео</label><input id="url" type="url" placeholder="https://www.youtube.com/watch?v=…"><p class="hint">Скачивание выполняет хост. Для закрытого видео и cookies пока используй CLI.</p></div>
+          <p id="source-error" class="error" role="alert"></p>
+          <label for="video-name">Название обработки (необязательно)</label><input id="video-name" placeholder="Например, лекция о Python">
+          <p class="hint" id="storage"></p>
+        </section>
+        <section class="card"><h2>2. Речь и текст на экране</h2>
+          <label for="speech">Распознавание речи</label><select id="speech"><option value="auto">Субтитры, иначе локальная расшифровка</option><option value="off">Не распознавать речь</option></select>
+          <p class="hint">Apple Silicon: MLX, если установлен. Остальные системы: Whisper. Модель может скачаться при первом запуске; GPU выбирает движок. Faster-whisper пока не включён.</p>
+          <label for="lang">Язык речи</label><select id="lang"><option value="">Определить автоматически</option><option value="ru">Русский</option><option value="en">Английский</option><option value="de">Немецкий</option><option value="es">Испанский</option></select>
+          <details><summary>Движок и вычислительное устройство</summary>
+            <label for="speech-engine">Движок речи</label><select id="speech-engine"><option value="auto">Автоматически: MLX → Whisper</option><option value="whisper">Whisper</option><option value="mlx">MLX — Apple Silicon</option></select>
+            <label for="speech-model">Модель Whisper</label><select id="speech-model"><option>tiny</option><option>base</option><option selected>small</option><option>medium</option><option>large-v3</option><option>turbo</option></select>
+            <label for="device">Устройство Whisper</label><select id="device"><option value="auto">Автоматически</option><option value="cpu">CPU — процессор</option><option value="cuda">CUDA — совместимая NVIDIA</option></select>
+            <p class="hint">Tiny/base требуют меньше памяти; более крупные модели требуют больше ресурсов. Для MLX используется large-v3-turbo на Metal, поля Whisper не применяются. Первая загрузка модели требует сети.</p>
+          </details>
+          <label for="subs-file">Готовые субтитры с компьютера браузера</label><input type="file" id="subs-file" accept=".srt,.vtt,.json3">
+          <label for="subs-path">Или субтитры на хосте</label><div class="row"><input id="subs-path" placeholder="Необязательно"><button disabled type="button" id="browse-subs">Выбрать субтитры</button></div>
+          <p class="hint">Готовые субтитры заменяют распознавание речи. Выбирай один источник субтитров.</p>
+          <label for="ocr">Текст на экране (OCR)</label><select id="ocr"><option value="off">Не распознавать</option><option value="windows">Windows OCR</option><option value="vision">Apple Vision — macOS</option><option value="tesseract">Tesseract — Windows / Linux / macOS</option></select>
+          <p class="hint">OCR помогает искать команды и надписи. Он не подтверждает содержание кадра: изображение нужно открыть.</p>
+        </section>
+      </div>
+      <section class="card"><h2>3. Качество и запуск</h2>
+        <label for="preset">Режим анализа кадров</label><select id="preset"><option value="balanced">Надёжное покрытие — разрыв до 15 секунд</option><option value="fast">Быстрый обзор — по ключевым кадрам</option><option value="detail">Подробный — разрыв до 5 секунд</option><option value="custom">Свои параметры</option></select>
+        <details><summary>Дополнительные параметры</summary><div class="settings">
+          <label>Максимальный разрыв, с<input id="max-gap" type="number" min="1" max="300" value="15"><small>Меньше — больше кадров и дольше обработка.</small></label>
+          <label>Лимит кадров<input id="max-frames" type="number" min="0" max="100000" value="0"><small>0 — автоматически. Покрытие важнее лимита.</small></label>
+          <label>Ширина кадров, px<input id="width" type="number" min="320" max="3840" value="1280"></label>
+          <label>Высота скачивания, px<input id="max-height" type="number" min="240" max="4320" value="1080"><small>Только для ссылок.</small></label>
+          <label>Ширина OCR-копии, px<input id="ocr-width" type="number" min="0" max="7680" value="0"><small>0 — исходное разрешение.</small></label>
+          <label class="check"><input id="fast" type="checkbox">Быстрый проход</label>
+          <label class="check"><input id="no-cues" type="checkbox">Не привязывать кадры к указательным репликам</label>
+        </div></details>
+        <p class="hint">После обработки модель выгружается вместе с процессом. Результаты сохраняются. Закрытие вкладки не останавливает обработку.</p>
+        <p id="form-error" class="error" role="alert"></p>
+        <div class="row"><button disabled class="primary" id="start" type="submit">Проверить и начать</button><button disabled type="button" id="abort-upload" hidden>Отменить загрузку</button><span id="upload-state" role="status"></span></div><progress id="upload-progress" max="100" value="0" hidden aria-label="Передача файла"></progress>
+      </section>
+    </form>
+  </section>
+  <section id="library" class="page" hidden>
+    <h1>Обработки</h1><p>История сохраняется на хосте. Незавершённая задача после перезапуска помечается прерванной.</p>
+    <div class="card"><label for="index-path">Открыть готовый индекс на хосте</label><div class="row"><input id="index-path" placeholder="Папка с index.json"><button disabled type="button" id="browse-index">Выбрать папку</button><button disabled type="button" id="open-index">Открыть индекс</button></div></div>
+    <div id="jobs" class="stack"></div>
+    <section id="job-detail" class="card" hidden><h2 id="job-title"></h2><p id="job-state" role="status"></p><p id="job-stage" role="status" aria-live="polite"></p><progress id="job-progress" max="100" aria-label="Прогресс текущего этапа обработки" aria-describedby="job-stage"></progress><p class="hint">Процент относится к текущему этапу, не ко всему видео. Если движок не сообщает процент, отображается индикатор выполнения.</p><p id="resources"></p><button disabled type="button" id="cancel-job">Остановить и освободить модель</button><details><summary>Ход обработки и диагностика</summary><pre id="job-log"></pre></details></section>
+    <section id="result" class="card" hidden><h2 id="result-title">Результат</h2><p id="coverage"></p><ul id="gaps"></ul>
+      <label for="query">Поиск по речи и тексту на экране</label><div class="row"><input id="query" type="search" placeholder="Слово или фраза"><button disabled type="button" id="clear">Очистить поиск</button></div><p id="search-state" role="status"></p><div id="hits"></div><button disabled type="button" id="more-hits" hidden>Показать больше результатов</button>
+      <form id="frames-form" novalidate><label for="at">Открыть кадры около момента</label><div class="row"><input id="at" placeholder="4:12" value="0:00"><button disabled type="submit">Открыть кадры</button></div></form><div id="frames" class="frames"></div>
+      <details><summary>Проверить утверждения разбора</summary><label for="claims">Текст с метками [MM:SS / fNNNN]</label><textarea class="resize-none" id="claims" rows="6"></textarea><button disabled type="button" id="verify">Проверить ссылки на кадры</button><div id="verification" role="status"></div></details>
+    </section>
+  </section>
+  <section id="setup" class="page" hidden><h1>Готовность хоста</h1><p>Проверяется компьютер, на котором запущено приложение. Устанавливай только нужные компоненты в окружение приложения.</p><button disabled type="button" id="refresh-setup">Проверить повторно</button><p id="environment"></p><p id="gpu"></p>
+    <section class="card"><h2>Установка компонентов</h2><p id="install-state" role="status" aria-live="polite">Проверяем состояние установки…</p><details><summary>Журнал установки</summary><pre id="install-log"></pre></details><p class="hint">На Windows кнопка запускает PowerShell в тихом режиме. Запрос UAC подтверждается на хосте. Не завершай приложение во время установки. На Linux и macOS используй команды вручную. Драйверы не меняются.</p></section>
+    <div id="dependencies" class="stack"></div><p class="hint">Ручные команды остаются доступны. Кнопка установки дополняет пользовательский PATH и обновляет окружение приложения. Tesseract получает языки rus и eng в папке пользователя.</p></section>
+</main>
+<dialog id="files-dialog" aria-labelledby="files-title"><h2 id="files-title">Файлы на хосте</h2><p id="folder"></p><p id="files-error" role="alert"></p><div class="row"><button disabled type="button" id="folder-up">Назад к папке</button><button disabled type="button" id="choose-folder" hidden>Выбрать эту папку</button><button disabled type="button" id="close-files">Закрыть</button></div><div id="files"></div><button disabled type="button" id="more-files" hidden>Следующие 100</button></dialog>
+<dialog id="confirm-dialog" aria-labelledby="confirm-title"><h2 id="confirm-title">Подтверди действие</h2><p id="confirm-text"></p><div class="row"><button disabled type="button" id="confirm-no" autofocus>Вернуться</button><button disabled type="button" id="confirm-yes">Продолжить</button></div></dialog>
+</body></html>

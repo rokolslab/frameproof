@@ -16,6 +16,8 @@ permissions:
 
 jobs:
   build-and-publish:
+    # Fork does not own the upstream PyPI project.
+    if: github.repository == 'edvardgrishin27/frameproof'
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -29,7 +31,7 @@ jobs:
         run: |
           # Именно сам пакет с dev-зависимостями: одного pytest мало,
           # ядру нужен numpy, и без него тесты падают на импорте.
-          pip install -e ".[dev]"
+          pip install -e ".[dev,web]"
           python -m pytest -q
       - name: Build
         run: |

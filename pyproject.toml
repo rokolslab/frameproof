@@ -29,6 +29,7 @@ net = ["yt-dlp>=2024.1.1"]
 # Быстрая локальная расшифровка на Apple Silicon.
 mlx = ["mlx-whisper>=0.4"]
 dev = ["pytest>=7"]
+web = ["psutil>=5.9"]
 
 [project.scripts]
 frameproof = "frameproof.__main__:main"
@@ -46,7 +47,7 @@ packages = ["frameproof"]
 # contrib/ едет туда же и по той же причине: README предлагает
 # `--ocr-command "python .../ocr_windows.py"`, и после pip install этот файл
 # должен где-то лежать. Ровно на этом уже спотыкались с навыком.
-frameproof = ["py.typed", "assets/skill/*.md", "assets/agents/*.md", "contrib/*.py"]
+frameproof = ["py.typed", "assets/skill/*.md", "assets/agents/*.md", "assets/web/*", "contrib/*.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

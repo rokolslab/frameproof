@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from .budget import DEFAULT_WIDTH, scaled_height
 from .probe import VideoInfo
 from .util import run, tc_short, which
+from .progress import report as progress
 
 JPEG_QUALITY = 3
 
@@ -46,6 +47,8 @@ def extract(
     ffmpeg = which("ffmpeg")
 
     frames: list[ExtractedFrame] = []
+    picks = list(picks)
+    progress("Извлечение кадров", 0, len(picks))
     for i, pick in enumerate(picks):
         fid = f"f{i:04d}"
         path = os.path.join(out_dir, f"{fid}.jpg")
@@ -61,6 +64,7 @@ def extract(
                 path,
             ]
         )
+        progress("Извлечение кадров", i + 1, len(picks))
         if not os.path.exists(path):
             continue
         frames.append(

@@ -9,4 +9,11 @@ bench/claude-video
 bench/*.json
 !bench/hermes.json  # сохранённый прогон замера: на него ссылаются README
 .venv/
+tools/
+.web-data/
+test-media/
 .DS_Store
+.env
+.env.*
+!.env.example
+premium-audit.json

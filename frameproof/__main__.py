@@ -62,6 +62,9 @@ def cmd_index(args: argparse.Namespace) -> int:
     from .probe import probe
     from .report import render
     from .select import select_frames
+    from .progress import report as progress
+
+    progress("Подготовка видео и субтитров")
 
     out_dir = _work_dir(args.target, args.out)
     os.makedirs(out_dir, exist_ok=True)
@@ -88,6 +91,7 @@ def cmd_index(args: argparse.Namespace) -> int:
         from .fetch import fetch
 
         source_url = args.target
+        progress("Скачивание видео")
         print(f"качаю: {args.target}", file=sys.stderr)
         got = fetch(
             args.target, out_dir, max_height=args.max_height,
@@ -110,6 +114,7 @@ def cmd_index(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
 
+    progress("Проверка видео")
     info = probe(video_path)
     print(
         f"видео: {info.width}x{info.height} {info.fps:.2f} к/с "
@@ -118,7 +123,11 @@ def cmd_index(args: argparse.Namespace) -> int:
     )
 
     if transcript is None and not args.no_transcribe:
-        transcript = _local_transcript(audio_path or video_path, out_dir, args.lang)
+        progress("Распознавание речи: подготовка аудио, загрузка модели и расшифровка")
+        transcript = _local_transcript(audio_path or video_path, out_dir, args.lang,
+            engine=getattr(args, 'speech_engine', 'auto'),
+            model=getattr(args, 'speech_model', 'small'),
+            device=getattr(args, 'device', 'auto'))
     if transcript is None and not args.no_transcribe:
         print(
             "⚠ транскрипта нет — искать по речи будет нечему. "
@@ -130,6 +139,7 @@ def cmd_index(args: argparse.Namespace) -> int:
         print("быстрый проход: только ключевые кадры...", file=sys.stderr)
     else:
         print("анализирую изменения экрана...", file=sys.stderr)
+    progress("Анализ изменений экрана")
     sig = analyze(info, fast=args.fast)
 
     cues: list[float] = []
@@ -140,6 +150,7 @@ def cmd_index(args: argparse.Namespace) -> int:
         if cues:
             print(f"якорей по речи («вот здесь», «смотрите»): {len(cues)}", file=sys.stderr)
 
+    progress("Выбор кадров")
     sel = select_frames(
         sig, info.duration, max_gap=args.max_gap, cap=args.max_frames, cues=cues
     )
@@ -153,6 +164,7 @@ def cmd_index(args: argparse.Namespace) -> int:
         if ocr_mod.available(args.ocr_command):
             print("распознаю текст на кадрах...", file=sys.stderr)
 
+    progress("Сохранение индекса")
     index = write(
         out_dir,
         info=info,
@@ -181,6 +193,7 @@ def cmd_index(args: argparse.Namespace) -> int:
             if len(big) == len(frames):
                 images = [f.path for f in big]
         try:
+            progress("Распознавание текста на кадрах (OCR)")
             hits = ocr_mod.annotate_index(out_dir, images=images, command=args.ocr_command)
         finally:
             if big_dir:
@@ -194,6 +207,7 @@ def cmd_index(args: argparse.Namespace) -> int:
             print(f"OCR пропущен: не найден {where}", file=sys.stderr)
 
     print()
+    progress("Формирование отчёта")
     print(render(sel, title=title[:60], frame_w=frames[0].width if frames else 0,
                  frame_h=frames[0].height if frames else 0))
     print()
@@ -203,7 +217,7 @@ def cmd_index(args: argparse.Namespace) -> int:
     return 0 if index["coverage"]["complete"] else 0
 
 
-def _local_transcript(source_path: str, out_dir: str, lang: str | None):
+def _local_transcript(source_path: str, out_dir: str, lang: str | None, **options):
     """Расшифровка локально. О любом провале сообщаем вслух.
 
     Тихий возврат None здесь once уже стоил пустого индекса: скачивался video-only
@@ -228,7 +242,7 @@ def _local_transcript(source_path: str, out_dir: str, lang: str | None):
         return None
     print("расшифровываю локально (ключи не нужны)...", file=sys.stderr)
     try:
-        return transcribe_audio(audio, lang=lang)
+        return transcribe_audio(audio, lang=lang, **options)
     except Exception as exc:
         print(f"расшифровка не удалась: {exc}", file=sys.stderr)
         return None
@@ -501,6 +515,19 @@ def cmd_install(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_web(args: argparse.Namespace) -> int:
+    """Тонкая CLI-обёртка: импорт не утяжеляет обычные команды."""
+    if args.host not in {"127.0.0.1", "localhost"}:
+        print("web по умолчанию предназначен только для локального компьютера; "
+              "внешний адрес не разрешён", file=sys.stderr)
+        return 2
+    from .web import serve
+
+    serve(host=args.host, port=args.port, open_browser=not args.no_browser,
+          data=args.data_dir, roots=args.media_root)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="frameproof",
@@ -523,6 +550,9 @@ def build_parser() -> argparse.ArgumentParser:
     i.add_argument("--width", type=int, default=1280, help="ширина кадра (1280 = 1196 токенов)")
     i.add_argument("--max-height", type=int, default=1080, help="качество скачиваемого потока")
     i.add_argument("--lang", default=None, help="язык для расшифровки, напр. ru")
+    i.add_argument('--speech-engine', choices=['auto','whisper','mlx'], default='auto', help='движок речи')
+    i.add_argument('--speech-model', choices=['tiny','base','small','medium','large-v3','turbo'], default='small', help='модель Whisper; MLX использует large-v3-turbo')
+    i.add_argument('--device', choices=['auto','cpu','cuda'], default='auto', help='устройство Whisper; MLX использует Metal')
     i.add_argument("--ocr", action="store_true", help="распознать текст на кадрах (macOS)")
     i.add_argument("--ocr-width", type=int, default=0,
                    help="ширина копии для распознавания (0 = родное разрешение видео). "
@@ -590,6 +620,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     d = sub.add_parser("doctor", help="проверить окружение")
     d.set_defaults(func=cmd_doctor)
+
+    w = sub.add_parser("web", help="запустить локальный веб-интерфейс")
+    w.add_argument("--host", default="127.0.0.1", help="адрес прослушивания (по умолчанию только этот ПК)")
+    w.add_argument("--port", type=int, default=8765, help="порт (по умолчанию 8765)")
+    w.add_argument("--no-browser", action="store_true", help="не открывать браузер автоматически")
+    w.add_argument("--data-dir", default=None, help="каталог загрузок, задач и результатов")
+    w.add_argument("--media-root", action="append", default=[], help="разрешённая папка видео/индексов на хосте; можно повторять")
+    w.set_defaults(func=lambda a: _cmd_web(a))
 
     n = sub.add_parser("install", help="поставить скилл в Claude Code")
     n.add_argument("--force", action="store_true")

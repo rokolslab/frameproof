@@ -114,7 +114,7 @@ def test_оговорка_доезжает_до_вывода_search(tmp_path):
     (d / "frames.jsonl").write_text("", encoding="utf-8")
 
     r = subprocess.run([sys.executable, "-m", "frameproof", "search", "цена", "--out", str(d)],
-                       capture_output=True, text=True, cwd=КОРЕНЬ)
+                       capture_output=True, text=True, encoding='utf-8', cwd=КОРЕНЬ)
     assert r.returncode == 0, r.stderr
     assert "без кадров" in r.stdout, "search промолчал про разрыв рядом с находкой"
     assert "15:00–18:00" in r.stdout

@@ -26,6 +26,8 @@ import json
 import os
 import re
 import shutil
+import sys
+import importlib.util
 from dataclasses import dataclass
 
 
@@ -157,15 +159,17 @@ def _mlx_whisper(audio: str, lang: str | None) -> Transcript | None:
     return Transcript(segments=segs, source="mlx-whisper", language=res.get("language") or lang)
 
 
-def _openai_whisper(audio: str, lang: str | None) -> Transcript | None:
-    if not shutil.which("whisper"):
+def _openai_whisper(audio: str, lang: str | None, model='small', device='auto') -> Transcript | None:
+    if importlib.util.find_spec("whisper") is None:
         return None
     from .util import run
     out_dir = os.path.dirname(audio) or "."
-    cmd = ["whisper", audio, "--model", "small", "--output_format", "json",
+    cmd = [sys.executable, "-m", "whisper", audio, "--model", model, "--output_format", "json",
            "--output_dir", out_dir, "--verbose", "False"]
     if lang:
         cmd += ["--language", lang]
+    if device != 'auto':
+        cmd += ['--device', device]
     run(cmd)
     stem = os.path.splitext(os.path.basename(audio))[0]
     js = os.path.join(out_dir, f"{stem}.json")
@@ -180,19 +184,25 @@ def _openai_whisper(audio: str, lang: str | None) -> Transcript | None:
     return Transcript(segments=segs, source="openai-whisper", language=data.get("language") or lang)
 
 
-def transcribe_audio(audio: str, *, lang: str | None = None) -> Transcript:
+def transcribe_audio(audio: str, *, lang: str | None = None, engine='auto', model='small', device='auto') -> Transcript:
     """Локальная расшифровка. Пробуем от быстрого к медленному."""
-    for engine in (_mlx_whisper, _openai_whisper):
+    if engine not in ('auto','mlx','whisper') or model not in ('tiny','base','small','medium','large-v3','turbo') or device not in ('auto','cpu','cuda'):
+        raise ValueError('Недопустимые параметры движка речи')
+    whisper = lambda audio, lang: _openai_whisper(audio,lang,model,device)
+    engines = (_mlx_whisper,whisper) if engine=='auto' else ((_mlx_whisper,) if engine=='mlx' else (whisper,))
+    errors = []
+    for runner in engines:
         try:
-            result = engine(audio, lang)
-        except Exception:
+            result = runner(audio, lang)
+        except Exception as exc:
+            errors.append(str(exc))
             result = None
         if result and result.segments:
             return result
     raise RuntimeError(
         "не нашёл локального движка расшифровки. Поставьте один из:\n"
         "  pip install mlx-whisper      # быстро на Apple Silicon\n"
-        "  pip install -U openai-whisper"
+        "  pip install -U openai-whisper\n" + '\n'.join(errors)
     )
 
 
