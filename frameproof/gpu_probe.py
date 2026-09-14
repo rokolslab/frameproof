@@ -45,7 +45,9 @@ def probe() -> dict:
 
 
 def main() -> None:
-    print(json.dumps(probe(), ensure_ascii=False))
+    # Windows pipes may use an ANSI code page while the parent decodes UTF-8.
+    # JSON escapes keep this process-to-process protocol ASCII and unambiguous.
+    print(json.dumps(probe(), ensure_ascii=True))
 
 
 if __name__ == "__main__":

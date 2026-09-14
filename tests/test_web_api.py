@@ -467,6 +467,16 @@ def test_readiness_reports_cuda_without_importing_torch(monkeypatch):
     assert "torch" not in __import__("sys").modules
 
 
+def test_gpu_probe_uses_ascii_safe_json(monkeypatch, capsys):
+    from frameproof import gpu_probe
+
+    monkeypatch.setattr(gpu_probe, "probe", lambda: {"detail": "CUDA не готова"})
+    gpu_probe.main()
+    raw = capsys.readouterr().out
+    assert raw.encode("ascii")
+    assert json.loads(raw)["detail"] == "CUDA не готова"
+
+
 def test_linux_readiness_exposes_only_tesseract_for_ocr(monkeypatch):
     import frameproof.readiness as ready
 
