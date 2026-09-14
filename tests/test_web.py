@@ -25,3 +25,4 @@ def test_web_document_preserves_explicit_frame_gate():
     script = (Path(__file__).parents[1] / "frameproof" / "assets" / "web" / "app.js").read_text(encoding="utf-8")
     assert "compositionstart" in script
     assert "configureOcr" in script
+    assert "api('/api/pick-index-folder',{},undefined,310000)" in script

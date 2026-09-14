@@ -15,9 +15,9 @@ function configureOcr(ocr) {
   select.disabled=false;
 }
 async function run(action) {try {await action();} catch(error){status(error.message);}}
-async function api(path, body, signal) {
+async function api(path, body, signal, timeoutMs=20000) {
   const controller = new AbortController();
-  const timeout=setTimeout(()=>controller.abort(),20000);
+  const timeout=setTimeout(()=>controller.abort(),timeoutMs);
   const abort=()=>controller.abort();signal?.addEventListener('abort',abort,{once:true});
   try {
     const response=await fetch(path,{method:body===undefined?'GET':'POST',headers:body===undefined?{}:{'Content-Type':'application/json','X-Frameproof-Token':state.token},body:body===undefined?undefined:JSON.stringify(body),signal:controller.signal});
@@ -92,7 +92,7 @@ async function browse(path='',offset=0){
   }catch(error){$('files-error').textContent=error.message;}
 }
 function picker(field){state.picker=field;$('files-dialog').showModal();run(()=>browse());}
-$('browse-video').addEventListener('click',()=>picker('host-path'));$('browse-subs').addEventListener('click',()=>picker('subs-path'));$('browse-index').addEventListener('click',()=>run(async()=>{status('Откройте папку в системном окне на хосте…');const selected=await api('/api/pick-index-folder',{});if(selected.cancelled){status('Выбор папки отменён.');return;}$('index-path').value=selected.path;$('index-path').dataset.selection=selected.selection;$('index-path').dataset.title=selected.title;status(`Выбрана папка: ${selected.path}`);}));
+$('browse-video').addEventListener('click',()=>picker('host-path'));$('browse-subs').addEventListener('click',()=>picker('subs-path'));$('browse-index').addEventListener('click',()=>run(async()=>{status('Откройте папку в системном окне на хосте…');const selected=await api('/api/pick-index-folder',{},undefined,310000);if(selected.cancelled){status('Выбор папки отменён.');return;}$('index-path').value=selected.path;$('index-path').dataset.selection=selected.selection;$('index-path').dataset.title=selected.title;status(`Выбрана папка: ${selected.path}`);}));
 $('copy-selected').addEventListener('click',()=>chooseCopyDestination());$('close-files').addEventListener('click',()=>$('files-dialog').close());$('folder-up').addEventListener('click',()=>run(()=>browse(state.parent)));$('more-files').addEventListener('click',()=>run(()=>browse(state.folder,state.offset+100)));$('choose-folder').addEventListener('click',()=>{const destination=state.folder;if(state.picker==='copy-destination'){confirmation(`Скопировать выбранные обработки (${state.copySelected.size}) в «${destination}»? Существующие папки не будут перезаписаны.`, 'Скопировать', async()=>{await copySelected(destination);});}else $('index-path').value=destination;$('files-dialog').close();});
 function upload(file){
   if(!file||file.size===0)throw Error('Выбери непустой файл.');if(file.size>20*1024**3)throw Error('Максимальный размер файла — 20 ГиБ.');
