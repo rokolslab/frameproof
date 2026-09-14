@@ -5,7 +5,9 @@
 1. Пользователь выбирает загрузку с браузера, файл на хосте или URL. Результаты
    сохраняются автоматически в уникальную папку: существующие индексы не перезаписываются.
 2. Пока задача работает, повторный запуск недоступен; результат сообщает готовность или ошибку.
-3. После готовности показаны покрытие и поиск по речи/OCR, но не изображения.
+3. При открытии обработки фокус переходит к «Текст видео»: полная речь доступна
+   страницами по 100 реплик; TXT/Markdown/SRT и копирование содержат весь текст.
+   Ниже показаны покрытие и поиск по речи/OCR, но не изображения.
 4. Поиск по речи/OCR не запрашивает изображения. Явное открытие момента показывает
    до трёх ближайших кадров; выдача записывается в served.jsonl, как при CLI.
 
@@ -25,6 +27,7 @@
 | Scrollbar | style.css global | DESIGN.md | none | computed style |
 | Toast | status + inline error regions | this document | error/status | browser |
 | CRUD | Jobs and Application | web-plan.md | create/read/cancel | tests/test_web_api.py |
+| Transcript | transcript_export.py + app.js loadTranscript | current user request: read meeting speech | paged reading/full export/partial video failure | tests/test_transcript_export.py |
 
 ## Resource and data lifecycle
 
@@ -61,3 +64,19 @@ GPU runtime compatibility require real processing tests on the destination host.
 Search is bounded to 200 displayed matches with explicit load-more; file browser
 uses pages of 100. Query is not placed in URL due to transcript privacy. No form
 reset on failure or section change. CLI stderr is retained as job diagnostics.
+
+## Расшифровка совещаний и лекций
+
+Источник решения: пользователь запросил автоматическое сохранение и чтение полного
+текста для ручной работы или передачи агенту. Сразу после ASR/субтитров CLI атомарно
+сохраняет transcript.txt, transcript.md, transcript.srt и segments.jsonl на хосте,
+до анализа кадров. Каждая запись получает отдельную папку. Поздняя ошибка кадров
+не закрывает доступ к сохранённой речи и не меняет ошибку видео на успех.
+Это расшифровка, не конспект и не распознавание участников; текст не редактируется.
+Старые индексы читаются из segments.jsonl без повторного ASR и без записи при GET.
+Экспорт не передаёт данные внешним сервисам. Пользователь сам решает, куда отправить
+скачанный или скопированный текст. Пустой текст не выдаётся за успешную расшифровку.
+Пагинация использует existing api/status/button primitives, не localStorage/URL.
+Поздний ответ прежнего задания не заменяет выбранный текст. Во время обновления
+страницы чтения старый текст остаётся видимым, ошибку можно повторить. Фоновое
+завершение задания не перехватывает фокус; явное открытие прокручивает к тексту.

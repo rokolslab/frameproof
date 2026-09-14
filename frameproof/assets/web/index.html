@@ -67,6 +67,16 @@
     <div class="card"><label for="index-path">Открыть готовый индекс на хосте</label><div class="row"><input id="index-path" placeholder="Папка с index.json"><button disabled type="button" id="browse-index">Выбрать папку</button><button disabled type="button" id="open-index">Открыть индекс</button></div></div>
     <div id="jobs" class="stack"></div>
     <section id="job-detail" class="card" hidden><h2 id="job-title"></h2><p id="job-state" role="status"></p><p id="job-stage" role="status" aria-live="polite"></p><progress id="job-progress" max="100" aria-label="Прогресс текущего этапа обработки" aria-describedby="job-stage"></progress><p class="hint">Процент относится к текущему этапу, не ко всему видео. Если движок не сообщает процент, отображается индикатор выполнения.</p><p id="resources"></p><button disabled type="button" id="cancel-job">Остановить и освободить модель</button><details><summary>Ход обработки и диагностика</summary><pre id="job-log"></pre></details></section>
+    <section id="transcript" class="card" hidden aria-labelledby="transcript-title">
+      <h2 id="transcript-title" tabindex="-1">Текст видео</h2>
+      <p>Полная расшифровка речи, не конспект. Её можно читать здесь, скачать или передать агенту. Автоматическое распознавание может ошибаться; разделение по участникам пока не выполняется.</p>
+      <p id="transcript-saved" class="hint"></p>
+      <div class="row"><button disabled type="button" id="copy-transcript">Копировать весь текст</button><button disabled type="button" data-transcript-format="txt">Скачать TXT</button><button disabled type="button" data-transcript-format="md">Скачать Markdown</button><button disabled type="button" data-transcript-format="srt">Скачать SRT</button></div>
+      <p id="transcript-status" role="status" aria-live="polite"></p>
+      <button disabled type="button" id="retry-transcript" hidden>Повторить загрузку текста</button>
+      <div id="transcript-reader" aria-label="Распознанная речь" aria-busy="false"></div>
+      <div class="row" id="transcript-pages" hidden><button disabled type="button" id="transcript-prev">Предыдущие реплики</button><span id="transcript-range"></span><button disabled type="button" id="transcript-next">Следующие реплики</button></div>
+    </section>
     <section id="result" class="card" hidden><h2 id="result-title">Результат</h2><p id="coverage"></p><ul id="gaps"></ul>
       <label for="query">Поиск по речи и тексту на экране</label><div class="row"><input id="query" type="search" placeholder="Слово или фраза"><button disabled type="button" id="clear">Очистить поиск</button></div><p id="search-state" role="status"></p><div id="hits"></div><button disabled type="button" id="more-hits" hidden>Показать больше результатов</button>
       <form id="frames-form" novalidate><label for="at">Открыть кадры около момента</label><div class="row"><input id="at" placeholder="4:12" value="0:00"><button disabled type="submit">Открыть кадры</button></div></form><div id="frames" class="frames"></div>

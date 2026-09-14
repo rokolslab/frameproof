@@ -117,15 +117,12 @@ def write(
 ) -> dict:
     os.makedirs(out_dir, exist_ok=True)
 
-    seg_path = os.path.join(out_dir, "segments.jsonl")
     n_segments = 0
     if transcript is not None:
-        with open(seg_path, "w", encoding="utf-8") as fh:
-            for s in transcript.segments:
-                row = s.as_row()
-                row["tc"] = tc(s.t0)
-                fh.write(json.dumps(row, ensure_ascii=False) + "\n")
-                n_segments += 1
+        from .transcript_export import save as save_transcript
+
+        save_transcript(out_dir, transcript)
+        n_segments = len(transcript.segments)
 
     # Каждому кадру — реплика, звучавшая в этот момент. Это и есть сшивка.
     seg_lookup = list(transcript.segments) if transcript is not None else []

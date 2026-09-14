@@ -135,6 +135,12 @@ def cmd_index(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
 
+    if transcript is not None:
+        from .transcript_export import save as save_transcript
+
+        save_transcript(out_dir, transcript)
+        print("Расшифровка автоматически сохранена: transcript.txt, transcript.md, transcript.srt", file=sys.stderr)
+
     if args.fast:
         print("быстрый проход: только ключевые кадры...", file=sys.stderr)
     else:

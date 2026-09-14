@@ -276,6 +276,10 @@ def test_real_video_subtitles_search_and_release(server):
     assert request(
         http, "/api/search?" + urlencode({"id": data["id"], "q": "Synthetic"})
     )[1]["hits"]
+    folder = http.app.data / "jobs" / data["id"] / "index"
+    for suffix in ("txt", "md", "srt"):
+        assert "Synthetic speech test" in (folder / f"transcript.{suffix}").read_text("utf-8")
+    assert request(http, "/api/transcript?" + urlencode({"id": data["id"]}))[1]["total"] == 1
     from frameproof.web_jobs import Jobs
 
     restored = Jobs(http.app.data / "jobs")

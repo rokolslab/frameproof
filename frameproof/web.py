@@ -22,6 +22,7 @@ from .installers import Installations
 from .readiness import readiness
 from .util import parse_tc
 from .web_jobs import Jobs
+from . import transcript_export
 
 VIDEO = {
     ".mp4",
@@ -115,6 +116,14 @@ class Application:
             "entries": entries[offset : offset + 100],
             "more": len(entries) > offset + 100,
         }
+
+    def transcript_path(self, key):
+        if key in self.jobs.rows:
+            folder = self.data / "jobs" / key / "index"
+            if not folder.resolve().is_relative_to(self.data / "jobs"):
+                raise ValueError("Недопустимый путь результата.")
+            return folder
+        return self.index_path(key)
 
     def arguments(self, body, preflight=False):
         source = str(body.get("source", "host"))
@@ -263,7 +272,7 @@ def create_server(data, roots=(), host="127.0.0.1", port=8765):
             pass
 
         def send(
-            self, data, status=200, content_type="application/json; charset=utf-8"
+            self, data, status=200, content_type="application/json; charset=utf-8", filename=None
         ):
             if not isinstance(data, bytes):
                 data = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -272,6 +281,8 @@ def create_server(data, roots=(), host="127.0.0.1", port=8765):
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
+            if filename:
+                self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
             self.send_header(
                 "Content-Security-Policy",
                 "default-src 'self'; img-src 'self' blob:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'",
@@ -339,6 +350,20 @@ def create_server(data, roots=(), host="127.0.0.1", port=8765):
                     return
                 if path == "/api/report":
                     self.send(indexes.load_index(str(app.index_path(q["id"]))))
+                    return
+                if path == "/api/transcript":
+                    folder = app.transcript_path(q["id"])
+                    rows = transcript_export.read_rows(folder)
+                    format = q.get("format")
+                    if format:
+                        if not rows:
+                            raise ValueError("Распознанного текста нет. Проверьте режим речи и журнал обработки.")
+                        text = transcript_export.render(rows, format)
+                        self.send(text.encode("utf-8"), content_type=transcript_export.FORMATS[format] + "; charset=utf-8", filename=f"transcript.{format}")
+                    else:
+                        offset = max(0, int(q.get("offset", 0)))
+                        limit = min(100, max(1, int(q.get("limit", 100))))
+                        self.send({"rows": rows[offset:offset + limit], "total": len(rows), "offset": offset, "limit": limit, "folder": str(folder), "saved": bool(rows)})
                     return
                 if path == "/api/search":
                     folder = str(app.index_path(q["id"]))

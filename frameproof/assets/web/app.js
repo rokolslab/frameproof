@@ -84,7 +84,38 @@ $('create-form').addEventListener('submit',async event=>{
   catch(error){$('form-error').textContent=error.message;}
   finally{state.busy=false;$('start').disabled=false;$('abort-upload').hidden=true;$('upload-progress').hidden=true;}
 });
-let jobsSnapshot='';
+let jobsSnapshot='',transcriptJobState='',resultSequence=0;
+const transcriptState={id:null,offset:0,total:0,request:0,busy:false};
+function transcriptControls(enabled){$('copy-transcript').disabled=!enabled;document.querySelectorAll('[data-transcript-format]').forEach(b=>b.disabled=!enabled);}
+function resetTranscript(id){transcriptState.id=id;transcriptState.request++;transcriptState.offset=0;transcriptState.total=0;transcriptState.busy=false;$('transcript').hidden=false;$('transcript-reader').replaceChildren();$('transcript-saved').textContent='';$('transcript-status').textContent='Загружаем сохранённый текст…';$('transcript-pages').hidden=true;$('retry-transcript').hidden=true;transcriptControls(false);}
+async function loadTranscript(id,offset=0){
+  const seq=++transcriptState.request;transcriptState.busy=true;$('transcript-reader').setAttribute('aria-busy','true');$('transcript-status').textContent='Загружаем сохранённый текст…';$('retry-transcript').hidden=true;$('transcript-prev').disabled=true;$('transcript-next').disabled=true;transcriptControls(false);
+  try{
+    const data=await api('/api/transcript?'+new URLSearchParams({id,offset}));if(seq!==transcriptState.request||id!==transcriptState.id)return;
+    transcriptState.offset=data.offset;transcriptState.total=data.total;
+    $('transcript-saved').textContent=data.saved?`Текст автоматически сохранён на хосте: ${data.folder}. Закрытие вкладки или приложения его не удаляет.`:'Текст пока не сохранён: распознанных реплик нет.';
+    $('transcript-reader').replaceChildren(...data.rows.map(row=>{const section=element('article',undefined,'transcript-segment');section.append(element('span',row.tc,'transcript-time'),element('p',row.text));return section;}));
+    $('transcript-status').textContent=data.total?'Текст доступен для чтения. Копирование и скачивание включают все реплики, не только текущую страницу.':'Распознанного текста пока нет. Если обработка идёт, дождись её завершения. Если завершена — проверь журнал, включи распознавание речи или добавь субтитры и запусти новую обработку.';
+    $('transcript-pages').hidden=data.total<=100;$('transcript-range').textContent=`Реплики ${data.offset+1}–${data.offset+data.rows.length} из ${data.total}`;
+    $('transcript-prev').disabled=data.offset===0;$('transcript-next').disabled=data.offset+data.rows.length>=data.total;transcriptControls(data.total>0);
+  }catch(error){if(seq!==transcriptState.request)return;$('transcript-status').textContent=`Не удалось загрузить текст. ${error.message}`;$('retry-transcript').hidden=false;$('retry-transcript').disabled=false;}
+  finally{if(seq===transcriptState.request){transcriptState.busy=false;$('transcript-reader').setAttribute('aria-busy','false');}}
+}
+$('retry-transcript').addEventListener('click',()=>run(()=>loadTranscript(transcriptState.id,transcriptState.offset)));
+for(const [id,delta] of [['transcript-prev',-100],['transcript-next',100]])$(id).addEventListener('click',()=>run(async()=>{await loadTranscript(transcriptState.id,Math.max(0,transcriptState.offset+delta));$('transcript-title').focus();}));
+async function exportTranscript(format,copy=false){
+  if(transcriptState.busy||!transcriptState.total)return;
+  const id=transcriptState.id,seq=transcriptState.request,controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);transcriptState.busy=true;transcriptControls(false);$('transcript-status').textContent=copy?'Подготавливаем весь текст для копирования…':'Подготавливаем файл…';
+  try{
+    const response=await fetch('/api/transcript?'+new URLSearchParams({id,format}),{signal:controller.signal});if(!response.ok){const data=await response.json();throw Error(data.error||'Не удалось получить текст.');}
+    const blob=await response.blob();if(id!==transcriptState.id||seq!==transcriptState.request)return;
+    if(copy){await navigator.clipboard.writeText(await blob.text());$('transcript-status').textContent='Весь текст скопирован. Можно вставить в документ или передать агенту.';}
+    else{const link=element('a');link.href=response.url;link.download=`transcript.${format}`;document.body.append(link);link.click();link.remove();$('transcript-status').textContent='Файл передан браузеру для скачивания. Исходный результат остаётся на хосте.';}
+  }catch(error){if(id===transcriptState.id&&seq===transcriptState.request)$('transcript-status').textContent=(copy?'Не удалось скопировать. Можно скачать TXT. ':'Не удалось скачать. Повтори попытку. ')+(error.name==='AbortError'?'Хост не ответил вовремя.':error.message);}
+  finally{clearTimeout(timer);if(id===transcriptState.id&&seq===transcriptState.request){transcriptState.busy=false;transcriptControls(transcriptState.total>0);}}
+}
+$('copy-transcript').addEventListener('click',()=>run(()=>exportTranscript('txt',true)));
+document.querySelectorAll('[data-transcript-format]').forEach(b=>b.addEventListener('click',()=>run(()=>exportTranscript(b.dataset.transcriptFormat))));
 function renderJobProgress(job){
   const progress=job.progress||{stage:'Подготовка',percent:null},bar=$('job-progress');
   const running=job.state==='running'||job.state==='cancelling';
@@ -96,17 +127,24 @@ function renderJobProgress(job){
 async function refreshJobs(){
   if(state.stopped)return;const jobs=await api('/api/jobs'),snapshot=JSON.stringify(jobs);
   if(snapshot!==jobsSnapshot){jobsSnapshot=snapshot;$('jobs').replaceChildren(...jobs.map(j=>{const box=element('article',undefined,'card');box.append(element('h2',j.title),element('p',`${labels[j.state]||j.state} · ${new Date(j.created*1000).toLocaleString('ru-RU')}`),button('Открыть обработку',()=>selectJob(j.id)));return box;}));if(!jobs.length)$('jobs').append(element('p','Пока нет обработок. Добавь первое видео.'));}
-  if(state.job){const j=await api('/api/job?'+new URLSearchParams({id:state.job}));$('job-title').textContent=j.title;$('job-state').textContent=labels[j.state]||j.state;renderJobProgress(j);$('resources').textContent=j.resources;$('job-log').textContent=j.log||'Ожидаем вывод процесса…';$('cancel-job').disabled=!['running','cancelling'].includes(j.state);if(j.state==='done'&&state.index!==j.id)await openResult(j.id);}
+  if(state.job){
+    const selected=state.job,j=await api('/api/job?'+new URLSearchParams({id:selected}));if(state.job!==selected)return;
+    $('job-title').textContent=j.title;$('job-state').textContent=labels[j.state]||j.state;renderJobProgress(j);$('resources').textContent=j.resources;$('job-log').textContent=j.log||'Ожидаем вывод процесса…';$('cancel-job').disabled=!['running','cancelling'].includes(j.state);
+    const signature=j.id+':'+j.state;
+    if(transcriptJobState!==signature){transcriptJobState=signature;await loadTranscript(j.id);}
+    if(state.job===selected&&j.state==='done'&&state.index!==j.id)await openResult(j.id);
+  }
 }
-async function selectJob(id){state.job=id;$('job-detail').hidden=false;$('result').hidden=true;state.index=null;await refreshJobs();}
+async function selectJob(id){resultSequence++;state.request++;frameSequence++;state.job=id;$('job-detail').hidden=false;$('result').hidden=true;state.index=null;transcriptJobState='';resetTranscript(id);await refreshJobs();if(state.job===id)$('transcript-title').focus();}
 async function openResult(id){
+  const sequence=++resultSequence;
   frameSequence++;
-  const report=await api('/api/report?'+new URLSearchParams({id}));state.index=id;state.request++;$('result').hidden=false;$('result-title').textContent=report.video.title;$('coverage').textContent=`Покрытие: ${Math.round(report.coverage.ratio*100)}%. Максимальный разрыв: ${report.coverage.actual_max_gap_sec} с. Кадров: ${report.frames.count}. Реплик: ${report.transcript.segment_count}.`;$('gaps').replaceChildren(...report.coverage.gaps.map(g=>element('li',`Без гарантии кадров: ${g.tc}`)));$('frames').replaceChildren();$('hits').replaceChildren();$('query').value='';$('verification').replaceChildren();$('search-state').textContent='Введи запрос или открой кадры по времени.';if(!report.transcript.segment_count)status('В индексе нет речи. Поиск по речи недоступен; кадры можно открыть по времени.');
+  const report=await api('/api/report?'+new URLSearchParams({id}));if(sequence!==resultSequence)return;state.index=id;state.request++;$('result').hidden=false;$('result-title').textContent=report.video.title;$('coverage').textContent=`Покрытие: ${Math.round(report.coverage.ratio*100)}%. Максимальный разрыв: ${report.coverage.actual_max_gap_sec} с. Кадров: ${report.frames.count}. Реплик: ${report.transcript.segment_count}.`;$('gaps').replaceChildren(...report.coverage.gaps.map(g=>element('li',`Без гарантии кадров: ${g.tc}`)));$('frames').replaceChildren();$('hits').replaceChildren();$('query').value='';$('verification').replaceChildren();$('search-state').textContent='Введи запрос или открой кадры по времени.';if(!report.transcript.segment_count)status('В индексе нет речи. Поиск по речи недоступен; кадры можно открыть по времени.');
   $('result-title').textContent=state.job===id?$('job-title').textContent:report.video.title.split(/[\\/]/).pop();
   $('claims').value='';
-  if(report.transcript.segment_count)status('Обработка готова. Можно искать текст и открывать кадры.');
+  if(report.transcript.segment_count)status('Индекс видео готов. Расшифровка и поиск показаны ниже.');
 }
-$('open-index').addEventListener('click',()=>run(async()=>{const result=await api('/api/open',{path:$('index-path').value});state.job=null;$('job-detail').hidden=true;await openResult(result.id);status('Готовый индекс открыт.');}));
+$('open-index').addEventListener('click',()=>run(async()=>{const sequence=++resultSequence,result=await api('/api/open',{path:$('index-path').value});if(sequence!==resultSequence)return;state.job=null;state.request++;$('job-detail').hidden=true;resetTranscript(result.id);await loadTranscript(result.id);if(transcriptState.id!==result.id)return;await openResult(result.id);if(transcriptState.id===result.id){$('transcript-title').focus();status('Готовый индекс открыт.');}}));
 let searchAbort;
 async function search(){
   clearTimeout(state.timer);searchAbort?.abort();const seq=++state.request,query=$('query').value.trim();$('more-hits').hidden=true;if(!query){$('hits').replaceChildren();$('search-state').textContent='Введи запрос.';return;}if(!state.index)return;searchAbort=new AbortController();$('search-state').textContent='Ищем…';
