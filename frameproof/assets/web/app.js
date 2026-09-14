@@ -1,6 +1,6 @@
 'use strict';
 const $ = id => document.getElementById(id);
-const state = {token:'', index:null, job:null, request:0, limit:20, composing:false, timer:null, upload:null, busy:false, stopped:false, folder:'', parent:'', offset:0, picker:null, copySelected:new Set()};
+const state = {token:'', index:null, job:null, externalTitle:'', request:0, limit:20, composing:false, timer:null, upload:null, busy:false, stopped:false, folder:'', parent:'', offset:0, picker:null, copySelected:new Set()};
 const labels = {running:'Обработка выполняется',done:'Готово',error:'Ошибка обработки',cancelled:'Остановлено',cancelling:'Остановка процессов…',interrupted:'Прервано при завершении хоста'};
 function element(tag, text, className) { const node=document.createElement(tag); if(text!==undefined)node.textContent=text; if(className)node.className=className; return node; }
 function button(text, action) { const node=element('button',text);node.type='button';node.addEventListener('click',()=>run(action));return node; }
@@ -92,7 +92,7 @@ async function browse(path='',offset=0){
   }catch(error){$('files-error').textContent=error.message;}
 }
 function picker(field){state.picker=field;$('files-dialog').showModal();run(()=>browse());}
-$('browse-video').addEventListener('click',()=>picker('host-path'));$('browse-subs').addEventListener('click',()=>picker('subs-path'));$('browse-index').addEventListener('click',()=>picker('index-path'));
+$('browse-video').addEventListener('click',()=>picker('host-path'));$('browse-subs').addEventListener('click',()=>picker('subs-path'));$('browse-index').addEventListener('click',()=>run(async()=>{status('Откройте папку в системном окне на хосте…');const selected=await api('/api/pick-index-folder',{});if(selected.cancelled){status('Выбор папки отменён.');return;}$('index-path').value=selected.path;$('index-path').dataset.selection=selected.selection;$('index-path').dataset.title=selected.title;status(`Выбрана папка: ${selected.path}`);}));
 $('copy-selected').addEventListener('click',()=>chooseCopyDestination());$('close-files').addEventListener('click',()=>$('files-dialog').close());$('folder-up').addEventListener('click',()=>run(()=>browse(state.parent)));$('more-files').addEventListener('click',()=>run(()=>browse(state.folder,state.offset+100)));$('choose-folder').addEventListener('click',()=>{const destination=state.folder;if(state.picker==='copy-destination'){confirmation(`Скопировать выбранные обработки (${state.copySelected.size}) в «${destination}»? Существующие папки не будут перезаписаны.`, 'Скопировать', async()=>{await copySelected(destination);});}else $('index-path').value=destination;$('files-dialog').close();});
 function upload(file){
   if(!file||file.size===0)throw Error('Выбери непустой файл.');if(file.size>20*1024**3)throw Error('Максимальный размер файла — 20 ГиБ.');
@@ -168,11 +168,11 @@ async function openResult(id){
   const sequence=++resultSequence;
   frameSequence++;
   const report=await api('/api/report?'+new URLSearchParams({id}));if(sequence!==resultSequence)return;state.index=id;state.request++;$('result').hidden=false;$('result-title').textContent=report.video.title;$('coverage').textContent=`Покрытие: ${Math.round(report.coverage.ratio*100)}%. Максимальный разрыв: ${report.coverage.actual_max_gap_sec} с. Кадров: ${report.frames.count}. Реплик: ${report.transcript.segment_count}.`;$('gaps').replaceChildren(...report.coverage.gaps.map(g=>element('li',`Без гарантии кадров: ${g.tc}`)));$('frames').replaceChildren();$('hits').replaceChildren();$('query').value='';$('verification').replaceChildren();$('search-state').textContent='Введи запрос или открой кадры по времени.';if(!report.transcript.segment_count)status('В индексе нет речи. Поиск по речи недоступен; кадры можно открыть по времени.');
-  $('result-title').textContent=state.job===id?$('job-title').textContent:report.video.title.split(/[\\/]/).pop();
+  $('result-title').textContent=state.job===id?$('job-title').textContent:(state.externalTitle||report.video.title.split(/[\\/]/).pop());
   $('claims').value='';
   if(report.transcript.segment_count)status('Индекс видео готов. Расшифровка и поиск показаны ниже.');
 }
-$('open-index').addEventListener('click',()=>run(async()=>{const sequence=++resultSequence,result=await api('/api/open',{path:$('index-path').value});if(sequence!==resultSequence)return;state.job=null;state.request++;$('job-detail').hidden=true;resetTranscript(result.id);await loadTranscript(result.id);if(transcriptState.id!==result.id)return;await openResult(result.id);if(transcriptState.id===result.id){$('transcript-title').focus();status('Готовый индекс открыт.');}}));
+$('open-index').addEventListener('click',()=>run(async()=>{const sequence=++resultSequence,field=$('index-path'),body=field.dataset.selection?{selection:field.dataset.selection}:{path:field.value},result=await api('/api/open',body);delete field.dataset.selection;state.externalTitle=result.title||field.dataset.title||'';if(sequence!==resultSequence)return;state.job=null;state.request++;$('job-detail').hidden=true;resetTranscript(result.id);await loadTranscript(result.id);if(transcriptState.id!==result.id)return;await openResult(result.id);if(transcriptState.id===result.id){$('transcript-title').focus();status('Готовый индекс открыт.');}}));
 let searchAbort;
 async function search(){
   clearTimeout(state.timer);searchAbort?.abort();const seq=++state.request,query=$('query').value.trim();$('more-hits').hidden=true;if(!query){$('hits').replaceChildren();$('search-state').textContent='Введи запрос.';return;}if(!state.index)return;searchAbort=new AbortController();$('search-state').textContent='Ищем…';

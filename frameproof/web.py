@@ -43,6 +43,36 @@ def _inside_index(path, out_dir):
     return Path(path).resolve().is_relative_to(Path(out_dir).resolve())
 
 
+def _pick_index_folder_native():
+    """Return a folder explicitly chosen by the interactive Windows user."""
+    if os.name != "nt":
+        raise ValueError("Системный выбор папки пока доступен только в Windows.")
+    script = r"""
+Add-Type -AssemblyName System.Windows.Forms
+$OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+$dialog.Description = 'Выберите папку с готовым индексом Frameproof'
+$dialog.ShowNewFolderButton = $false
+if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+    [Console]::Write($dialog.SelectedPath)
+}
+"""
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-STA", "-Command", script],
+            capture_output=True,
+            timeout=300,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise ValueError("Окно выбора папки не ответило за пять минут.") from exc
+    if result.returncode:
+        detail = result.stderr.decode("utf-8", errors="replace").strip()
+        raise ValueError("Не удалось открыть системное окно выбора папки." + (f" {detail}" if detail else ""))
+    selected = result.stdout.decode("utf-8", errors="replace").strip()
+    return Path(selected).resolve() if selected else None
+
+
 class Application:
     def __init__(self, data, roots):
         self.data = Path(data).resolve()
@@ -58,6 +88,7 @@ class Application:
         self.token = secrets.token_urlsafe(32)
         self.registry_path = self.data / "indexes.json"
         self.registry_lock = threading.Lock()
+        self.index_selections = {}
         self.registry = (
             json.loads(self.registry_path.read_text("utf-8"))
             if self.registry_path.exists()
@@ -79,8 +110,46 @@ class Application:
         if key in self.jobs.rows and self.jobs.rows[key]["state"] == "done":
             return self.data / "jobs" / key / "index"
         if key in self.registry:
-            return self.local(self.registry[key])
+            saved = self.registry[key]
+            # indexes.json before 0.1.0 stored a plain path; retain those entries.
+            return Path(saved["path"] if isinstance(saved, dict) else saved).resolve()
         raise ValueError("Готовый индекс не найден.")
+
+    def pick_index_folder(self):
+        folder = _pick_index_folder_native()
+        if folder is None:
+            return {"cancelled": True}
+        if not folder.is_dir():
+            raise ValueError("Выбранная папка недоступна на хосте.")
+        token = secrets.token_urlsafe(24)
+        # A picker result is an explicit, one-time capability: do not turn the
+        # browser into unrestricted host filesystem access.
+        self.index_selections[token] = folder
+        return {"cancelled": False, "selection": token, "path": str(folder), "title": folder.name}
+
+    def open_index(self, body):
+        selection = body.get("selection")
+        if selection is not None:
+            if not isinstance(selection, str):
+                raise ValueError("Недопустимый выбор папки.")
+            folder = self.index_selections.pop(selection, None)
+            if folder is None:
+                raise ValueError("Выбор папки устарел. Выберите папку заново.")
+        else:
+            # Typed paths remain media-root scoped for compatibility.
+            folder = self.local(body.get("path", ""))
+        if not folder.is_dir():
+            raise ValueError("Выберите папку с готовым индексом.")
+        indexes.load_index(str(folder))
+        if not (folder / "frames.jsonl").is_file():
+            raise ValueError("В индексе нет frames.jsonl.")
+        with self.registry_lock:
+            key = "external_" + secrets.token_hex(12)
+            self.registry[key] = {"path": str(folder), "title": folder.name}
+            tmp = self.registry_path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(self.registry), encoding="utf-8")
+            tmp.replace(self.registry_path)
+        return {"id": key, "title": folder.name}
 
     def copy_indexes(self, identifiers, destination):
         if not isinstance(identifiers, list) or not 1 <= len(identifiers) <= 100:
@@ -535,17 +604,12 @@ def create_server(data, roots=(), host="127.0.0.1", port=8765):
                         )
                     return
                 if path == "/api/open":
-                    folder = app.local(body["path"])
-                    indexes.load_index(str(folder))
-                    if not (folder / "frames.jsonl").is_file():
-                        raise ValueError("В индексе нет frames.jsonl.")
-                    with app.registry_lock:
-                        key = "external_" + secrets.token_hex(12)
-                        app.registry[key] = str(folder)
-                        tmp = app.registry_path.with_suffix(".tmp")
-                        tmp.write_text(json.dumps(app.registry), encoding="utf-8")
-                        tmp.replace(app.registry_path)
-                    self.send({"id": key})
+                    self.send(app.open_index(body))
+                    return
+                if path == "/api/pick-index-folder":
+                    if body:
+                        raise ValueError("Системный выбор папки не принимает параметры.")
+                    self.send(app.pick_index_folder())
                     return
                 if path == "/api/cancel":
                     app.jobs.cancel()

@@ -210,6 +210,7 @@ def test_existing_search_frames_and_open_log(server):
     code, data = request(http, "/api/open", {"path": str(folder)})
     assert code == 200
     key = data["id"]
+    assert data["title"] == folder.name
     code, data = request(http, "/api/search?" + urlencode({"id": key, "q": "hello"}))
     assert code == 200 and len(data["hits"]) == 2
     assert not (folder / "served.jsonl").exists()
@@ -231,6 +232,17 @@ def test_existing_search_frames_and_open_log(server):
         ]
         == 200
     )
+
+
+def test_native_folder_selection_is_one_time_and_can_be_outside_media_root(server, tmp_path, monkeypatch):
+    http, _ = server
+    folder = make_index(tmp_path)
+    monkeypatch.setattr("frameproof.web._pick_index_folder_native", lambda: folder)
+    code, selected = request(http, "/api/pick-index-folder", {})
+    assert code == 200 and selected["path"] == str(folder)
+    code, opened = request(http, "/api/open", {"selection": selected["selection"]})
+    assert code == 200 and opened["title"] == "existing"
+    assert request(http, "/api/open", {"selection": selected["selection"]})[0] == 400
 
 
 def test_frame_traversal_blocked(server):
@@ -341,6 +353,7 @@ def test_finished_job_can_be_deleted_without_touching_source(server):
     assert not folder.exists()
     assert source.read_bytes() == b"source"
     assert request(http, "/api/jobs")[1] == []
+    assert request(http, "/api/job?" + urlencode({"id": job["id"]}))[0] == 400
 
 
 def test_copy_finished_indexes_to_selected_media_folder(server):
@@ -355,7 +368,6 @@ def test_copy_finished_indexes_to_selected_media_folder(server):
     assert result[0] == 200
     copied = Path(result[1]["copied"][0])
     assert copied.is_relative_to(media) and (copied / "index.json").is_file()
-    assert request(http, "/api/job?" + urlencode({"id": job["id"]}))[0] == 400
 
 
 def test_active_job_cannot_be_deleted(server, monkeypatch):
