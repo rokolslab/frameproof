@@ -20,7 +20,7 @@ from urllib.parse import parse_qs, urlparse
 from . import index as indexes
 from .installers import Installations
 from .readiness import readiness
-from .util import parse_tc
+from .util import parse_tc, slugify
 from .web_jobs import Jobs
 from . import transcript_export
 
@@ -81,6 +81,35 @@ class Application:
         if key in self.registry:
             return self.local(self.registry[key])
         raise ValueError("Готовый индекс не найден.")
+
+    def copy_indexes(self, identifiers, destination):
+        if not isinstance(identifiers, list) or not 1 <= len(identifiers) <= 100:
+            raise ValueError("Выберите от одной до ста завершённых обработок.")
+        if not all(isinstance(identifier, str) for identifier in identifiers):
+            raise ValueError("Недопустимый идентификатор обработки.")
+        if len(set(identifiers)) != len(identifiers):
+            raise ValueError("Одна обработка выбрана дважды.")
+        target_root = self.local(str(destination))
+        if not target_root.is_dir():
+            raise ValueError("Выберите папку назначения.")
+        copied = []
+        try:
+            for identifier in identifiers:
+                row = self.jobs.rows.get(identifier)
+                source = self.data / "jobs" / identifier / "index"
+                if not row or row.get("state") != "done" or not (source / "index.json").is_file():
+                    raise ValueError("Копировать можно только завершённые обработки.")
+                name = f"{slugify(row.get('title', 'index')) or 'index'}-{identifier[:8]}"
+                target = target_root / name
+                if target.exists():
+                    raise ValueError(f"Папка назначения уже существует: {name}")
+                shutil.copytree(source, target)
+                copied.append(target)
+        except Exception:
+            for path in reversed(copied):
+                shutil.rmtree(path, ignore_errors=True)
+            raise
+        return {"copied": [str(path) for path in copied]}
 
     def browse(self, value, offset=0):
         if not value:
@@ -528,6 +557,14 @@ def create_server(data, roots=(), host="127.0.0.1", port=8765):
                         raise ValueError("Укажите обработку для удаления.")
                     app.jobs.delete(identifier)
                     self.send({"ok": True})
+                    return
+                if path == "/api/copy-indexes":
+                    if set(body) != {"ids", "destination"}:
+                        raise ValueError("Укажите обработки и папку назначения.")
+                    with app.operations_lock:
+                        if app.jobs.active:
+                            raise ValueError("Дождитесь завершения текущей обработки.")
+                        self.send(app.copy_indexes(body["ids"], body["destination"]))
                     return
                 if path == "/api/verify":
                     from .verify import audit

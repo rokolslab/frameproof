@@ -341,6 +341,20 @@ def test_finished_job_can_be_deleted_without_touching_source(server):
     assert not folder.exists()
     assert source.read_bytes() == b"source"
     assert request(http, "/api/jobs")[1] == []
+
+
+def test_copy_finished_indexes_to_selected_media_folder(server):
+    http, media = server
+    identifier = "copyable"
+    source = http.app.data / "jobs" / identifier / "index"
+    source.mkdir(parents=True)
+    (source / "index.json").write_text("{}", encoding="utf-8")
+    (source / "frames.jsonl").write_text("", encoding="utf-8")
+    http.app.jobs.rows[identifier] = {"id": identifier, "title": "Выбор ниши", "state": "done", "created": 0}
+    result = request(http, "/api/copy-indexes", {"ids": [identifier], "destination": str(media)})
+    assert result[0] == 200
+    copied = Path(result[1]["copied"][0])
+    assert copied.is_relative_to(media) and (copied / "index.json").is_file()
     assert request(http, "/api/job?" + urlencode({"id": job["id"]}))[0] == 400
 
 

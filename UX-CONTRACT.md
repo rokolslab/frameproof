@@ -79,6 +79,10 @@ are not shown for that host.
 Search is bounded to 200 displayed matches with explicit load-more; file browser
 uses pages of 100. Query is not placed in URL due to transcript privacy. No form
 reset on failure or section change. CLI stderr is retained as job diagnostics.
+Completed jobs may be selected for portable copying. The destination must be an
+existing `--media-root`; only each job's `index` directory is copied, source
+videos and internal job state are excluded, existing destination folders are
+never overwritten, and a failed multi-copy rolls back folders created by it.
 
 ## Расшифровка совещаний и лекций
 
