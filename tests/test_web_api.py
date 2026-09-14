@@ -106,6 +106,25 @@ def test_all_frame_and_speech_options_reach_cli(server, monkeypatch):
     assert "--fast" in args and "--no-cues" in args
 
 
+def test_nvidia_cuda_is_required_and_forced_for_speech(server, monkeypatch):
+    from frameproof import web
+
+    http, media = server
+    video = media / "input.mp4"
+    video.touch()
+    report = {
+        "gpu": {"nvidia_detected": True, "cuda_available": True},
+        "items": [{"id": name, "installed": True, "ready": True} for name in ("ffmpeg", "numpy", "whisper")],
+        "ocr": {"options": []},
+    }
+    monkeypatch.setattr(web, "readiness", lambda: report)
+    args = http.app.arguments({"source": "host", "target": str(video), "device": "cpu"})
+    assert args[args.index("--device") + 1] == "cuda"
+    report["gpu"]["cuda_available"] = False
+    with pytest.raises(ValueError, match="CUDA PyTorch"):
+        http.app.arguments({"source": "host", "target": str(video)})
+
+
 def test_csrf_host_and_diagnostics(server):
     http, _ = server
     assert request(http, "/api/session")[0] == 200
@@ -427,6 +446,25 @@ def test_windows_and_apple_readiness(monkeypatch):
     assert data["ocr"]["default"] == "windows"
     assert [item["id"] for item in data["ocr"]["options"]] == ["windows"]
     assert "tesseract" not in {item["id"] for item in data["items"]}
+
+
+def test_readiness_reports_cuda_without_importing_torch(monkeypatch):
+    import frameproof.readiness as ready
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(ready, "refresh_path", lambda: None)
+    monkeypatch.setattr(
+        ready.subprocess,
+        "run",
+        lambda *a, **kw: SimpleNamespace(
+            returncode=0,
+            stdout=b'{"nvidia_detected": true, "cuda_available": true, "device_name": "RTX", "detail": "ok"}',
+        ),
+    )
+    data = ready.readiness()
+    assert data["gpu"]["cuda_available"] is True
+    assert data["gpu"]["device_name"] == "RTX"
+    assert "torch" not in __import__("sys").modules
 
 
 def test_linux_readiness_exposes_only_tesseract_for_ocr(monkeypatch):

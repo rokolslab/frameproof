@@ -45,6 +45,19 @@ def test_no_arbitrary_command():
     assert installers.ps_quote("a'b") == "'a''b'"
 
 
+def test_whisper_installer_makes_cuda_mandatory_when_nvidia_exists():
+    original = installers.sys.prefix
+    installers.sys.prefix = "test-venv"
+    try:
+        script = installers.script_for("whisper")
+    finally:
+        installers.sys.prefix = original
+    assert "Get-Command nvidia-smi" in script
+    assert installers.TORCH_CUDA_INDEX in script
+    assert "frameproof.gpu_probe" in script
+    assert "cuda_available" in script
+
+
 def test_system_python_rejected(monkeypatch):
     monkeypatch.setattr(installers.sys, "prefix", sys.base_prefix)
     with pytest.raises(ValueError, match="venv"):

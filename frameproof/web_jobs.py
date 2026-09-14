@@ -56,11 +56,16 @@ class Jobs:
             identifier = uuid.uuid4().hex
             folder = self.root / identifier
             folder.mkdir()
+            device = args[args.index("--device") + 1] if "--device" in args else "auto"
             row = {
                 "id": identifier,
                 "title": title,
                 "created": time.time(),
                 "state": "running",
+                "compute": {
+                    "requested": device,
+                    "actual": "CUDA запускается" if device == "cuda" else "Автовыбор движка",
+                },
             }
             log = (folder / "process.log").open("wb")
             try:
@@ -108,6 +113,10 @@ class Jobs:
             )
             row["exit_code"] = code
             row["finished"] = time.time()
+            if row.get("compute", {}).get("requested") == "cuda":
+                row["compute"]["actual"] = (
+                    "CUDA использована" if code == 0 else "CUDA-задача завершилась с ошибкой"
+                )
             self.save(row)
             self.active = None
             self.process = None

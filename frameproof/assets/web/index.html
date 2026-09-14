@@ -30,12 +30,12 @@
         </section>
         <section class="card"><h2>2. Речь и текст на экране</h2>
           <label for="speech">Распознавание речи</label><select id="speech"><option value="auto">Субтитры, иначе локальная расшифровка</option><option value="off">Не распознавать речь</option></select>
-          <p class="hint">Apple Silicon: MLX, если установлен. Остальные системы: Whisper. Модель может скачаться при первом запуске; GPU выбирает движок. Faster-whisper пока не включён.</p>
+          <p class="hint">Apple Silicon: MLX, если установлен. На хосте с NVIDIA CUDA Whisper использует GPU обязательно; без готовой CUDA запуск блокируется.</p>
+          <p id="gpu-runtime" class="hint" role="status" aria-live="polite">Проверяем CUDA на хосте…</p>
           <label for="lang">Язык речи</label><select id="lang"><option value="">Определить автоматически</option><option value="ru">Русский</option><option value="en">Английский</option><option value="de">Немецкий</option><option value="es">Испанский</option></select>
           <details><summary>Движок и вычислительное устройство</summary>
             <label for="speech-engine">Движок речи</label><select id="speech-engine"><option value="auto">Автоматически: MLX → Whisper</option><option value="whisper">Whisper</option><option value="mlx">MLX — Apple Silicon</option></select>
             <label for="speech-model">Модель Whisper</label><select id="speech-model"><option>tiny</option><option>base</option><option selected>small</option><option>medium</option><option>large-v3</option><option>turbo</option></select>
-            <label for="device">Устройство Whisper</label><select id="device"><option value="auto">Автоматически</option><option value="cpu">CPU — процессор</option><option value="cuda">CUDA — совместимая NVIDIA</option></select>
             <p class="hint">Tiny/base требуют меньше памяти; более крупные модели требуют больше ресурсов. Для MLX используется large-v3-turbo на Metal, поля Whisper не применяются. Первая загрузка модели требует сети.</p>
           </details>
           <label for="subs-file">Готовые субтитры с компьютера браузера</label><input type="file" id="subs-file" accept=".srt,.vtt,.json3">

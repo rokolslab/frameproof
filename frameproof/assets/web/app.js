@@ -28,7 +28,7 @@ async function api(path, body, signal) {
 function page(name) {document.querySelectorAll('.page').forEach(p=>p.hidden=p.id!==name);document.querySelectorAll('[data-page]').forEach(b=>b.setAttribute('aria-current',b.dataset.page===name?'page':'false'));document.title=`${{create:'Новое видео',library:'Обработки',setup:'Готовность'}[name]} — Frameproof`;if(name==='setup')run(checkSetup);if(name==='library')run(refreshJobs);}
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>page(b.dataset.page)));
 $('source').addEventListener('change',()=>{for(const kind of ['upload','host','url'])$(kind+'-source').hidden=$('source').value!==kind;});
-$('speech-engine').addEventListener('change',()=>{for(const id of ['speech-model','device'])$(id).disabled=$('speech-engine').value==='mlx';});
+$('speech-engine').addEventListener('change',()=>{$('speech-model').disabled=$('speech-engine').value==='mlx';});
 for(const id of ['video-file','host-path','url'])$(id).addEventListener('input',()=>{$(id).removeAttribute('aria-invalid');$('source-error').textContent='';});
 $('preset').addEventListener('change',()=>{const p=$('preset').value;if(p==='custom')return;$('max-gap').value=p==='detail'?5:15;$('fast').checked=p==='fast';});
 for(const id of ['max-gap','max-frames','width','max-height','ocr-width','fast','no-cues'])$(id).addEventListener('change',()=>$('preset').value='custom');
@@ -48,7 +48,9 @@ function deleteJob(job){
   });
 }
 async function checkSetup(){
-  const data=await api('/api/readiness');configureOcr(data.ocr);$('environment').textContent=`${data.system} ${data.machine} · Python ${data.python} · ${data.isolated?'Изолированное окружение':'Системный Python — рекомендуется .venv'} · ${data.environment}`;$('gpu').textContent=data.gpu;
+  const data=await api('/api/readiness'),gpu=data.gpu||{};configureOcr(data.ocr);$('environment').textContent=`${data.system} ${data.machine} · Python ${data.python} · ${data.isolated?'Изолированное окружение':'Системный Python — рекомендуется .venv'} · ${data.environment}`;
+  const gpuText=gpu.nvidia_detected?(gpu.cuda_available?`CUDA готова: ${gpu.device_name||'NVIDIA GPU'}${gpu.memory_total_mb?`, ${gpu.memory_total_mb} МБ VRAM`:''}. Whisper будет использовать GPU.`:`NVIDIA GPU обнаружена, но CUDA недоступна. Распознавание речи заблокировано до установки CUDA PyTorch. ${gpu.detail||''}`):'NVIDIA GPU на хосте не обнаружена. Whisper может использовать CPU.';
+  $('gpu').textContent=gpuText;$('gpu-runtime').textContent=gpuText;
   $('dependencies').replaceChildren(...data.items.map(item=>{
     const ready=item.ready??item.installed,box=element('article',undefined,'card dependency'+(ready?'':' missing'));
     box.append(element('h2',item.name),element('p',ready?'Готов':item.installed?'Установлен, требуется настройка':'Не установлен'),element('p',item.detail||item.purpose));
@@ -97,7 +99,7 @@ $('create-form').addEventListener('submit',async event=>{
   if((source==='upload'&&!$('video-file').files.length)||(source!=='upload'&&!target.trim())){$('source-error').textContent='Выбери видео или введи ссылку.';const field=$(source==='upload'?'video-file':source==='host'?'host-path':'url');field.setAttribute('aria-invalid','true');field.setAttribute('aria-describedby','source-error');field.focus();return;}
   if($('subs-file').files.length&&$('subs-path').value){$('form-error').textContent='Выбери один источник субтитров.';return;}
   const body={source,target,name:$('video-name').value,subs:$('subs-path').value,speech:$('speech').value,lang:$('lang').value,ocr:$('ocr').value,fast:$('fast').checked,no_cues:$('no-cues').checked};
-  body.speech_engine=$('speech-engine').value;body.speech_model=$('speech-model').value;body.device=$('device').value;
+  body.speech_engine=$('speech-engine').value;body.speech_model=$('speech-model').value;
   for(const id of ['max-gap','max-frames','width','max-height','ocr-width']){const input=$(id),value=Number(input.value);if(!input.value||!Number.isFinite(value)||value<Number(input.min)||value>Number(input.max)){$('form-error').textContent=`Проверь параметр: ${input.closest('label').firstChild.textContent}`;input.closest('details').open=true;input.focus();return;}body[id.replaceAll('-','_')]=value;}
   state.busy=true;$('start').disabled=true;
   try{await api('/api/preflight',{...body,upload_subs:Boolean($('subs-file').files.length)});if(source==='upload'){const sent=await upload($('video-file').files[0]);body.target=sent.path;if(!body.name)body.name=sent.name;}if($('subs-file').files.length)body.subs=(await upload($('subs-file').files[0])).path;const job=await api('/api/index',body);state.job=job.id;status('Обработка запущена. Вкладку можно закрыть.');page('library');await selectJob(job.id);}
@@ -149,7 +151,7 @@ async function refreshJobs(){
   if(snapshot!==jobsSnapshot){jobsSnapshot=snapshot;$('jobs').replaceChildren(...jobs.map(j=>{const box=element('article',undefined,'card'),actions=element('div',undefined,'row');actions.append(button('Открыть обработку',()=>selectJob(j.id)));const remove=button('Удалить обработку',()=>deleteJob(j));remove.className='danger';remove.disabled=['running','cancelling'].includes(j.state);actions.append(remove);box.append(element('h2',j.title),element('p',`${labels[j.state]||j.state} · ${new Date(j.created*1000).toLocaleString('ru-RU')}`),actions);return box;}));if(!jobs.length)$('jobs').append(element('p','Пока нет обработок. Добавь первое видео.'));}
   if(state.job){
     const selected=state.job,j=await api('/api/job?'+new URLSearchParams({id:selected}));if(state.job!==selected)return;
-    $('job-title').textContent=j.title;$('job-state').textContent=labels[j.state]||j.state;renderJobProgress(j);$('resources').textContent=j.resources;$('job-log').textContent=j.log||'Ожидаем вывод процесса…';$('cancel-job').disabled=!['running','cancelling'].includes(j.state);
+    $('job-title').textContent=j.title;$('job-state').textContent=labels[j.state]||j.state;renderJobProgress(j);$('resources').textContent=`${j.resources}. Вычисления: ${j.compute?.actual||'не определены'}${j.compute?.requested?` (запрошено: ${j.compute.requested})`:''}.`;$('job-log').textContent=j.log||'Ожидаем вывод процесса…';$('cancel-job').disabled=!['running','cancelling'].includes(j.state);
     const signature=j.id+':'+j.state;
     if(transcriptJobState!==signature){transcriptJobState=signature;await loadTranscript(j.id);}
     if(state.job===selected&&j.state==='done'&&state.index!==j.id)await openResult(j.id);

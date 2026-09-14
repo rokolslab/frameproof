@@ -65,6 +65,13 @@ in the browser requires checking status before retry. Manual commands/links rema
 User PATH is appended, not replaced; Tesseract language data is per-user. No driver
 changes. First speech use can download model weights. Platform OCR languages and
 GPU runtime compatibility require real processing tests on the destination host.
+On a Windows host where NVIDIA is detected, Whisper has a mandatory CUDA contract:
+the approved Whisper installation first installs the CUDA PyTorch runtime and must
+finish with `torch.cuda.is_available()` true. A job requiring local speech is blocked
+until that check succeeds, then starts with `--device cuda`; it never silently falls
+back to CPU. Readiness and every job show the detected CUDA state and requested/actual
+compute mode. The web server probes CUDA only in a short child process and never loads
+a model itself.
 The OCR select and readiness page are populated from the host's readiness
 response, not from the browser's operating system: Windows exposes Windows OCR,
 macOS exposes Apple Vision OCR, and Linux exposes Tesseract. Other OCR engines

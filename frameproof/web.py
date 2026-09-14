@@ -196,6 +196,15 @@ class Application:
             raise ValueError("Неизвестный режим речи.")
         if speech == "off":
             args.append("--no-transcribe")
+        report = readiness()
+        gpu = report.get("gpu", {})
+        needs_speech = speech != "off" and not subs and not (preflight and body.get("upload_subs"))
+        if needs_speech and gpu.get("nvidia_detected") and not gpu.get("cuda_available"):
+            raise ValueError(
+                "Обнаружена NVIDIA GPU, но CUDA PyTorch не готова. Установите Whisper в разделе «Готовность»: "
+                "установщик автоматически добавит CUDA-вариант PyTorch."
+            )
+        selected_device = "cuda" if needs_speech and gpu.get("cuda_available") else body.get("device", "auto")
         for key, default, allowed in [
             ("speech_engine", "auto", ("auto", "mlx", "whisper")),
             (
@@ -203,13 +212,12 @@ class Application:
                 "small",
                 ("tiny", "base", "small", "medium", "large-v3", "turbo"),
             ),
-            ("device", "auto", ("auto", "cpu", "cuda")),
+            ("device", selected_device, ("auto", "cpu", "cuda")),
         ]:
-            value = body.get(key, default)
+            value = selected_device if key == "device" and selected_device == "cuda" else body.get(key, default)
             if value not in allowed:
                 raise ValueError("Недопустимый параметр " + key)
             args.extend(["--" + key.replace("_", "-"), value])
-        report = readiness()
         present = {r["id"]: r.get("ready", r["installed"]) for r in report["items"]}
         missing = [name for name in ("ffmpeg", "numpy") if not present.get(name)]
         if (

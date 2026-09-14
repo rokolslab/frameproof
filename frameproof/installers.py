@@ -16,6 +16,7 @@ PIP = {
     "whisper": "openai-whisper",
     "windows": "winsdk",
 }
+TORCH_CUDA_INDEX = "https://download.pytorch.org/whl/cu126"
 WINGET = {
     "ffmpeg": "Gyan.FFmpeg",
     "js": "OpenJS.NodeJS.LTS",
@@ -91,10 +92,25 @@ def script_for(component):
             raise ValueError(
                 "Автоустановка Python-пакетов разрешена только в .venv приложения."
             )
+        if component == "whisper":
+            lines += [
+                "$nvidia = Get-Command nvidia-smi -ErrorAction SilentlyContinue",
+                "if ($nvidia) {",
+                f"  & {ps_quote(sys.executable)} -m pip --disable-pip-version-check --no-input install torch torchvision torchaudio --index-url {TORCH_CUDA_INDEX}",
+                '  if ($LASTEXITCODE -ne 0) { throw "Не удалось установить CUDA-вариант PyTorch: $LASTEXITCODE" }',
+                "}",
+            ]
         lines += [
             f"& {ps_quote(sys.executable)} -m pip --disable-pip-version-check --no-input install {PIP[component]}",
             'if ($LASTEXITCODE -ne 0) { throw "pip завершился с кодом $LASTEXITCODE" }',
         ]
+        if component == "whisper":
+            lines += [
+                "if ($nvidia) {",
+                f"  $gpu = (& {ps_quote(sys.executable)} -m frameproof.gpu_probe | ConvertFrom-Json)",
+                '  if (-not $gpu.cuda_available) { throw "NVIDIA обнаружена, но CUDA PyTorch не готов: $($gpu.detail)" }',
+                "}",
+            ]
     else:
         # WinGet invokes the selected installer's UAC itself. Never elevate the server.
         lines += [

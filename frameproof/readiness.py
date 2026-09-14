@@ -1,12 +1,38 @@
 """Cheap diagnostics: never load torch/MLX or allocate GPU memory in the server."""
 
 import importlib.util
+import json
 import platform
 import shutil
 import subprocess
 import sys
 
-from .installers import PIP, WINGET, refresh_path
+from .installers import PIP, TORCH_CUDA_INDEX, WINGET, refresh_path
+
+
+def gpu_readiness() -> dict:
+    """Probe CUDA in a short child process; never import torch in the HTTP server."""
+    fallback = {
+        "nvidia_detected": bool(shutil.which("nvidia-smi")),
+        "cuda_available": False,
+        "detail": "Не удалось проверить PyTorch CUDA.",
+    }
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "frameproof.gpu_probe"],
+            capture_output=True,
+            timeout=12,
+            check=False,
+            creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0,
+        )
+        if result.returncode != 0:
+            return fallback | {"detail": "Проверка PyTorch CUDA завершилась с ошибкой."}
+        data = json.loads(result.stdout.decode("utf-8", "replace"))
+        if not isinstance(data, dict):
+            return fallback
+        return fallback | data
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return fallback
 
 
 def ocr_options(system: str):
@@ -34,6 +60,7 @@ def readiness():
     refresh_path()
     system = platform.system()
     apple = system == "Darwin" and platform.machine().lower() in ("arm64", "aarch64")
+    gpu = gpu_readiness()
     selected_ocr = {option["id"] for option in ocr_options(system)["options"]}
     pip = (
         ("& " if system == "Windows" else "")
@@ -157,6 +184,19 @@ def readiness():
         }
         for i, n, ok, p, c, u in entries
     ]
+    whisper = next(x for x in items if x["id"] == "whisper")
+    if gpu["nvidia_detected"]:
+        whisper["command"] = (
+            f'& "{sys.executable}" -m pip install torch torchvision torchaudio --index-url {TORCH_CUDA_INDEX}; '
+            f'& "{sys.executable}" -m pip install openai-whisper; '
+            f'& "{sys.executable}" -m frameproof.gpu_probe'
+        )
+        whisper["ready"] = whisper["installed"] and gpu["cuda_available"]
+        whisper["detail"] = (
+            "CUDA готова: " + (gpu.get("device_name") or "NVIDIA GPU")
+            if whisper["ready"]
+            else "NVIDIA обнаружена, но CUDA PyTorch не готова. Установите Whisper: установщик добавит CUDA PyTorch."
+        )
     tess = next((x for x in items if x["id"] == "tesseract"), None)
     if tess and tess["installed"]:
         try:
@@ -190,9 +230,7 @@ def readiness():
         "environment": sys.prefix,
         "isolated": sys.prefix != sys.base_prefix,
         "recommended_engine": "mlx" if apple else "whisper",
-        "gpu": "NVIDIA utility обнаружена; совместимость движка ещё не проверена"
-        if shutil.which("nvidia-smi")
-        else "GPU не проверена. Автовыбор устройства выполняется движком при обработке.",
+        "gpu": gpu,
         "ocr": ocr_options(system),
         "items": items,
     }
