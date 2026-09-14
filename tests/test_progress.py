@@ -16,6 +16,12 @@ def test_progress_file_and_stage_reset(tmp_path, monkeypatch):
     assert not path.with_suffix(".tmp").exists()
 
 
+def test_realtime_factor_is_audio_per_wall_second():
+    assert progress.realtime_factor(600, 75) == 8.0
+    assert progress.realtime_factor(0, 75) is None
+    assert progress.realtime_factor(600, 0) is None
+
+
 @pytest.mark.parametrize("state", ["error", "cancelled", "interrupted", "cancelling"])
 def test_terminal_failure_never_reports_completion(tmp_path, state):
     path = tmp_path / "progress.json"

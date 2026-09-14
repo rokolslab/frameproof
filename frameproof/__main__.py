@@ -16,6 +16,8 @@ import argparse
 import json
 import os
 import sys
+import time
+import wave
 
 from . import __version__
 from .util import display_path, parse_tc, plural, slugify, tc_short
@@ -230,6 +232,7 @@ def _local_transcript(source_path: str, out_dir: str, lang: str | None, **option
     поток без звука, ffmpeg честно не находил аудиодорожку, и пользователь получал
     ноль реплик без единого предупреждения.
     """
+    from .progress import realtime_factor
     from .transcribe import transcribe_audio
     from .util import run, which
 
@@ -246,12 +249,36 @@ def _local_transcript(source_path: str, out_dir: str, lang: str | None, **option
     if not os.path.exists(audio) or os.path.getsize(audio) < 1024:
         print("в файле нет звуковой дорожки — расшифровывать нечего", file=sys.stderr)
         return None
-    print("расшифровываю локально (ключи не нужны)...", file=sys.stderr)
     try:
-        return transcribe_audio(audio, lang=lang, **options)
+        with wave.open(audio, "rb") as wav:
+            audio_seconds = wav.getnframes() / wav.getframerate()
+    except (OSError, wave.Error, ZeroDivisionError):
+        audio_seconds = 0.0
+    print("расшифровываю локально (ключи не нужны)...", file=sys.stderr)
+    started = time.monotonic()
+    try:
+        transcript = transcribe_audio(audio, lang=lang, **options)
     except Exception as exc:
         print(f"расшифровка не удалась: {exc}", file=sys.stderr)
         return None
+    elapsed_seconds = time.monotonic() - started
+    factor = realtime_factor(audio_seconds, elapsed_seconds)
+    if factor is not None:
+        metrics = {
+            "audio_seconds": round(audio_seconds, 2),
+            "elapsed_seconds": round(elapsed_seconds, 2),
+            "realtime_factor": factor,
+        }
+        try:
+            path = os.path.join(out_dir, "transcription-metrics.json")
+            temporary = path + ".tmp"
+            with open(temporary, "w", encoding="utf-8") as fh:
+                json.dump(metrics, fh, ensure_ascii=False)
+            os.replace(temporary, path)
+        except OSError:
+            pass
+        print(f"средняя скорость распознавания: {factor}× реального времени", file=sys.stderr)
+    return transcript
 
 
 def cmd_search(args: argparse.Namespace) -> int:

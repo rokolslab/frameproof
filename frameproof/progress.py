@@ -25,6 +25,13 @@ def report(stage, completed=None, total=None):
         pass  # Progress must never break indexing (disk full, locked file, etc.).
 
 
+def realtime_factor(audio_seconds, elapsed_seconds):
+    """How many seconds of audio were recognized per wall-clock second."""
+    if not all(isinstance(value, (int, float)) and value > 0 for value in (audio_seconds, elapsed_seconds)):
+        return None
+    return round(audio_seconds / elapsed_seconds, 2)
+
+
 def read(path, state):
     result = {"stage": "Подготовка", "percent": None, "completed": None, "total": None}
     try:

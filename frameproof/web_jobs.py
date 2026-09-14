@@ -175,4 +175,16 @@ class Jobs:
             if row["state"] in ("running", "cancelling")
             else "Процесс обработки завершён; модель в веб-сервере не хранится"
         )
+        metrics_path = self.root / identifier / "index" / "transcription-metrics.json"
+        try:
+            metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+            factor = metrics.get("realtime_factor")
+            if isinstance(factor, (int, float)) and factor > 0:
+                row["transcription_speed"] = {
+                    "realtime_factor": factor,
+                    "audio_seconds": metrics.get("audio_seconds"),
+                    "elapsed_seconds": metrics.get("elapsed_seconds"),
+                }
+        except (OSError, ValueError, TypeError):
+            pass
         return row

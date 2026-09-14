@@ -314,6 +314,20 @@ def test_worker_error_persisted_and_released(server):
     assert http.app.jobs.process is None
 
 
+def test_job_exposes_saved_transcription_speed(server):
+    http, _ = server
+    row = http.app.jobs.start([], "speed")
+    folder = http.app.data / "jobs" / row["id"] / "index"
+    folder.mkdir()
+    (folder / "transcription-metrics.json").write_text(
+        json.dumps({"audio_seconds": 600, "elapsed_seconds": 75, "realtime_factor": 8.0}),
+        encoding="utf-8",
+    )
+    data = http.app.jobs.detail(row["id"])
+    assert data["transcription_speed"]["realtime_factor"] == 8.0
+    http.app.jobs.cancel()
+
+
 def test_finished_job_can_be_deleted_without_touching_source(server):
     http, media = server
     source = media / "source.mp4"
