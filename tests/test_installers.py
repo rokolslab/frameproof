@@ -54,6 +54,8 @@ def test_whisper_installer_makes_cuda_mandatory_when_nvidia_exists():
         installers.sys.prefix = original
     assert "Get-Command nvidia-smi" in script
     assert installers.TORCH_CUDA_INDEX in script
+    assert "--force-reinstall" in script
+    assert "--no-cache-dir" in script
     assert "frameproof.gpu_probe" in script
     assert "cuda_available" in script
 

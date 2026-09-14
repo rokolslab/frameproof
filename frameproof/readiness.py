@@ -187,7 +187,7 @@ def readiness():
     whisper = next(x for x in items if x["id"] == "whisper")
     if gpu["nvidia_detected"]:
         whisper["command"] = (
-            f'& "{sys.executable}" -m pip install torch torchvision torchaudio --index-url {TORCH_CUDA_INDEX}; '
+            f'& "{sys.executable}" -m pip install --upgrade --force-reinstall --no-cache-dir torch torchvision torchaudio --index-url {TORCH_CUDA_INDEX}; '
             f'& "{sys.executable}" -m pip install openai-whisper; '
             f'& "{sys.executable}" -m frameproof.gpu_probe'
         )

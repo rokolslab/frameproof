@@ -16,7 +16,8 @@ PIP = {
     "whisper": "openai-whisper",
     "windows": "winsdk",
 }
-TORCH_CUDA_INDEX = "https://download.pytorch.org/whl/cu126"
+# NVIDIA Blackwell (including RTX 5060 Ti) starts with CUDA 12.8 support.
+TORCH_CUDA_INDEX = "https://download.pytorch.org/whl/cu128"
 WINGET = {
     "ffmpeg": "Gyan.FFmpeg",
     "js": "OpenJS.NodeJS.LTS",
@@ -96,7 +97,7 @@ def script_for(component):
             lines += [
                 "$nvidia = Get-Command nvidia-smi -ErrorAction SilentlyContinue",
                 "if ($nvidia) {",
-                f"  & {ps_quote(sys.executable)} -m pip --disable-pip-version-check --no-input install torch torchvision torchaudio --index-url {TORCH_CUDA_INDEX}",
+                f"  & {ps_quote(sys.executable)} -m pip --disable-pip-version-check --no-input install --upgrade --force-reinstall --no-cache-dir torch torchvision torchaudio --index-url {TORCH_CUDA_INDEX}",
                 '  if ($LASTEXITCODE -ne 0) { throw "Не удалось установить CUDA-вариант PyTorch: $LASTEXITCODE" }',
                 "}",
             ]
@@ -232,11 +233,15 @@ class Installations:
             item = next(x for x in readiness()["items"] if x["id"] == component)
             ready = item.get("ready", item["installed"])
             success = code == 0 and ready
-            message = (
-                "Компонент установлен и обнаружен."
-                if success
-                else "Установка не подтверждена. Проверьте журнал, PATH и разрешение UAC; затем повторите проверку."
-            )
+            if success:
+                message = "Компонент установлен и проверен."
+            elif component == "whisper":
+                message = "Whisper не готов: " + item.get(
+                    "detail",
+                    "не удалось проверить CUDA PyTorch. Откройте журнал установки.",
+                )
+            else:
+                message = "Установка не подтверждена. Проверьте журнал, PATH и разрешение UAC; затем повторите проверку."
         except Exception as exc:  # noqa: BLE001 - worker must publish its failure state
             success, message, code = False, str(exc), None
         finally:

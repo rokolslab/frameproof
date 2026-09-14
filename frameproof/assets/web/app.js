@@ -64,6 +64,8 @@ let installSnapshot='',installPending=false,installRequest=null;
 async function startInstall(component){
   if(installPending)return;
   installPending=true;
+  const label=component==='whisper'?'Настраиваем Whisper: заменяем CPU PyTorch на CUDA 12.8 и проверяем GPU. Это может занять несколько минут.':'Устанавливаем компонент…';
+  $('install-state').textContent=label;status(label);
   installRequest={component,request_id:crypto.randomUUID(),confirmed:true};
   try{await api('/api/install',installRequest);installRequest=null;await refreshInstall();}
   catch(error){$('install-state').textContent=error.message+' Если связь прервалась, нажми «Проверить повторно» перед новой попыткой.';}
@@ -72,6 +74,7 @@ async function startInstall(component){
 async function refreshInstall(){
   const job=await api('/api/install'),running=job.state==='running';
   $('install-state').textContent=job.message||'Установки не выполняются.';
+  if(job.state==='error')status(job.message||'Установка завершилась ошибкой. Открой журнал установки.');
   $('install-state').setAttribute('aria-busy',String(running));
   $('install-log').textContent=job.log||'Журнал появится после начала установки.';
   document.querySelectorAll('[data-install]').forEach(b=>b.disabled=running||installPending);
