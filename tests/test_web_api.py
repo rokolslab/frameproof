@@ -386,12 +386,14 @@ def test_windows_and_apple_readiness(monkeypatch):
     assert data["recommended_engine"] == "mlx"
     assert {"mlx", "vision"} <= {x["id"] for x in data["items"]}
     assert data["ocr"]["default"] == "vision"
-    assert [item["id"] for item in data["ocr"]["options"]] == ["vision", "tesseract"]
+    assert [item["id"] for item in data["ocr"]["options"]] == ["vision"]
+    assert "tesseract" not in {item["id"] for item in data["items"]}
     monkeypatch.setattr(ready.platform, "system", lambda: "Windows")
     data = ready.readiness()
     assert any(x["id"] == "windows" and "winsdk" in x["command"] for x in data["items"])
     assert data["ocr"]["default"] == "windows"
-    assert [item["id"] for item in data["ocr"]["options"]] == ["windows", "tesseract"]
+    assert [item["id"] for item in data["ocr"]["options"]] == ["windows"]
+    assert "tesseract" not in {item["id"] for item in data["items"]}
 
 
 def test_linux_readiness_exposes_only_tesseract_for_ocr(monkeypatch):
@@ -421,14 +423,14 @@ def test_windows_install_command_with_call_operator(monkeypatch):
     assert items["whisper"]["command"].startswith('& "')
 
 
-def test_windows_tesseract_install_command(monkeypatch):
+def test_linux_tesseract_install_command(monkeypatch):
     import frameproof.readiness as ready
 
-    monkeypatch.setattr(ready.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(ready.platform, "system", lambda: "Linux")
     item = next(x for x in ready.readiness()["items"] if x["id"] == "tesseract")
     assert (
         item["command"]
-        == "winget install --id UB-Mannheim.TesseractOCR --exact --interactive"
+        == "sudo apt install tesseract-ocr tesseract-ocr-rus"
     )
     assert "rus" in item["purpose"] and "eng" in item["purpose"]
     assert "--list-langs" in item["purpose"]

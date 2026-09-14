@@ -53,5 +53,5 @@ def test_all_windows_dependencies_have_installers(monkeypatch):
     monkeypatch.setattr(readiness.shutil, "which", lambda _: None)
     monkeypatch.setattr(readiness, "refresh_path", lambda: None)
     items = readiness.readiness()["items"]
-    assert {x["id"] for x in items} == set(installers.PIP | installers.WINGET)
+    assert {x["id"] for x in items} == set(installers.PIP | installers.WINGET) - {"tesseract"}
     assert all(x["can_install"] and x["command"] for x in items)

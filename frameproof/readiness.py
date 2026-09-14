@@ -17,14 +17,8 @@ def ocr_options(system: str):
     the browser may be connected through an SSH tunnel.
     """
     choices = {
-        "Windows": [
-            {"id": "windows", "label": "Windows OCR"},
-            {"id": "tesseract", "label": "Tesseract"},
-        ],
-        "Darwin": [
-            {"id": "vision", "label": "Apple Vision OCR"},
-            {"id": "tesseract", "label": "Tesseract"},
-        ],
+        "Windows": [{"id": "windows", "label": "Windows OCR"}],
+        "Darwin": [{"id": "vision", "label": "Apple Vision OCR"}],
     }.get(system, [{"id": "tesseract", "label": "Tesseract"}])
     return {"default": choices[0]["id"], "options": choices}
 
@@ -40,6 +34,7 @@ def readiness():
     refresh_path()
     system = platform.system()
     apple = system == "Darwin" and platform.machine().lower() in ("arm64", "aarch64")
+    selected_ocr = {option["id"] for option in ocr_options(system)["options"]}
     pip = (
         ("& " if system == "Windows" else "")
         + '"'
@@ -101,23 +96,21 @@ def readiness():
             pip + "openai-whisper",
             "https://github.com/openai/whisper",
         ),
-        (
-            "tesseract",
-            "Tesseract OCR",
-            bool(shutil.which("tesseract")),
-            (
-                "Текст на экране; нужны языки rus и eng. "
-                "В Windows выберите их в установщике. После установки проверьте "
-                "tesseract --list-langs; если команда не найдена, добавьте папку Tesseract в PATH."
-            ),
-            "winget install --id UB-Mannheim.TesseractOCR --exact --interactive"
-            if system == "Windows"
-            else "sudo apt install tesseract-ocr tesseract-ocr-rus"
-            if system == "Linux"
-            else "",
-            "https://tesseract-ocr.github.io/tessdoc/Installation.html",
-        ),
     ]
+    if "tesseract" in selected_ocr:
+        entries.append(
+            (
+                "tesseract",
+                "Tesseract OCR",
+                bool(shutil.which("tesseract")),
+                "Текст на экране; нужны языки rus и eng. "
+                "После установки проверьте tesseract --list-langs.",
+                "sudo apt install tesseract-ocr tesseract-ocr-rus"
+                if system == "Linux"
+                else "",
+                "https://tesseract-ocr.github.io/tessdoc/Installation.html",
+            )
+        )
     if apple:
         entries.append(
             (
@@ -129,7 +122,7 @@ def readiness():
                 "https://github.com/ml-explore/mlx-examples/tree/main/whisper",
             )
         )
-    if system == "Darwin":
+    if "vision" in selected_ocr:
         entries.append(
             (
                 "vision",
@@ -140,7 +133,7 @@ def readiness():
                 "https://developer.apple.com/xcode/resources/",
             )
         )
-    if system == "Windows":
+    if "windows" in selected_ocr:
         entries.append(
             (
                 "windows",
@@ -164,8 +157,8 @@ def readiness():
         }
         for i, n, ok, p, c, u in entries
     ]
-    tess = next(x for x in items if x["id"] == "tesseract")
-    if tess["installed"]:
+    tess = next((x for x in items if x["id"] == "tesseract"), None)
+    if tess and tess["installed"]:
         try:
             import os
 

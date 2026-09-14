@@ -117,6 +117,7 @@ def test_readiness_checks_languages(monkeypatch, languages, ready):
     from frameproof import readiness
 
     monkeypatch.setattr(readiness, "refresh_path", lambda: None)
+    monkeypatch.setattr(readiness.platform, "system", lambda: "Linux")
     monkeypatch.setattr(
         readiness.shutil,
         "which",
