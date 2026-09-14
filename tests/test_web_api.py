@@ -3,6 +3,7 @@
 import json
 import shutil
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -292,6 +293,38 @@ def test_worker_error_persisted_and_released(server):
     row = wait_job(http, job["id"])
     assert row["state"] == "error"
     assert http.app.jobs.process is None
+
+
+def test_finished_job_can_be_deleted_without_touching_source(server):
+    http, media = server
+    source = media / "source.mp4"
+    source.write_bytes(b"source")
+    job = http.app.jobs.start([str(media / "missing.mp4"), "--no-transcribe"], "remove me")
+    assert wait_job(http, job["id"])["state"] == "error"
+    folder = http.app.data / "jobs" / job["id"]
+    assert folder.is_dir()
+
+    assert request(http, "/api/delete-job", {"id": job["id"]}) == (200, {"ok": True})
+    assert not folder.exists()
+    assert source.read_bytes() == b"source"
+    assert request(http, "/api/jobs")[1] == []
+    assert request(http, "/api/job?" + urlencode({"id": job["id"]}))[0] == 400
+
+
+def test_active_job_cannot_be_deleted(server, monkeypatch):
+    import frameproof.web_jobs as jobs_module
+
+    http, _ = server
+    original = jobs_module.subprocess.Popen
+
+    def fake_worker(args, **kwargs):
+        return original([sys.executable, "-c", "import time; time.sleep(60)"], **kwargs)
+
+    monkeypatch.setattr(jobs_module.subprocess, "Popen", fake_worker)
+    job = http.app.jobs.start([], "active")
+    code, data = request(http, "/api/delete-job", {"id": job["id"]})
+    assert code == 400
+    assert "Сначала остановите" in data["error"]
 
 
 def test_cancel_kills_process_tree_and_allows_next_job(server, monkeypatch):

@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -130,6 +131,24 @@ class Jobs:
                 psutil.wait_procs(children, timeout=5)
             except psutil.NoSuchProcess:
                 pass
+
+    def delete(self, identifier):
+        """Remove a finished job and every artifact created for it.
+
+        Source videos live outside a job folder (or in the separate uploads
+        store), so this deliberately removes only ``jobs/<id>``.
+        """
+        with self.lock:
+            row = self.rows.get(identifier)
+            if row is None:
+                raise ValueError("Обработка не найдена.")
+            if identifier == self.active or row["state"] in ("running", "cancelling"):
+                raise ValueError("Сначала остановите обработку и дождитесь её завершения.")
+            folder = (self.root / identifier).resolve()
+            if not folder.is_relative_to(self.root.resolve()):
+                raise ValueError("Недопустимый идентификатор обработки.")
+            shutil.rmtree(folder)
+            del self.rows[identifier]
 
     def detail(self, identifier):
         with self.lock:

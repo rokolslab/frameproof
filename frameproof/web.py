@@ -514,6 +514,13 @@ def create_server(data, roots=(), host="127.0.0.1", port=8765):
                     app.jobs.cancel()
                     self.send({"ok": True})
                     return
+                if path == "/api/delete-job":
+                    identifier = body.get("id")
+                    if not isinstance(identifier, str):
+                        raise ValueError("Укажите обработку для удаления.")
+                    app.jobs.delete(identifier)
+                    self.send({"ok": True})
+                    return
                 if path == "/api/verify":
                     from .verify import audit
 

@@ -26,7 +26,7 @@
 | Form | create-form / app.js validation | this document | source-specific | API + browser |
 | Scrollbar | style.css global | DESIGN.md | none | computed style |
 | Toast | status + inline error regions | this document | error/status | browser |
-| CRUD | Jobs and Application | web-plan.md | create/read/cancel | tests/test_web_api.py |
+| CRUD | Jobs and Application | web-plan.md | create/read/cancel/delete | tests/test_web_api.py |
 | Transcript | transcript_export.py + app.js loadTranscript | current user request: read meeting speech | paged reading/full export/partial video failure | tests/test_transcript_export.py |
 
 ## Resource and data lifecycle
@@ -35,7 +35,11 @@ Source: user decisions recorded in web-plan.md. Start is manual; no boot service
 One active process at a time; a second start returns an actionable error. Closing
 a browser tab leaves work running. Cancel terminates child processes. Completed
 jobs persist, but the GPU model never lives in the HTTP process. Warm retention is
-not enabled. Application shutdown requires no active task and closes the server.
+not enabled. Finished, failed, stopped and interrupted jobs can be permanently
+deleted after confirmation. Deletion removes only the selected job folder with
+its index, transcript, frames and diagnostics; source videos and separate uploads
+are not removed. A running job must be stopped and reach a terminal state first.
+Application shutdown requires no active task and closes the server.
 Uploads remain in the data directory; cancelling a partial transfer removes its
 partial file. Original host files and existing indexes are not overwritten.
 Remote usage uses an SSH tunnel. Host roots are explicitly provided on launch.

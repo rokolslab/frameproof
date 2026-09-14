@@ -36,6 +36,17 @@ function confirmation(text,verb,action){const dialog=$('confirm-dialog'),focus=d
 $('confirm-no').addEventListener('click',()=>$('confirm-dialog').close());
 $('shutdown').addEventListener('click',()=>confirmation('Приложение перестанет отвечать в браузере. Сохранённые результаты останутся на хосте. Активную обработку сначала нужно остановить.','Завершить',async()=>{await api('/api/shutdown',{});state.stopped=true;status('Приложение завершено. Для новой работы запусти его на хосте.');document.querySelectorAll('button,input,select').forEach(n=>n.disabled=true);}));
 $('cancel-job').addEventListener('click',()=>confirmation('Текущая обработка будет остановлена вместе с дочерними процессами. Частичный результат не считается готовым.','Остановить',async()=>{await api('/api/cancel',{});await refreshJobs();}));
+function clearDeletedJob(id){
+  if(state.job!==id)return;
+  resultSequence++;state.request++;frameSequence++;searchAbort?.abort();
+  state.job=null;state.index=null;transcriptJobState='';transcriptState.id=null;transcriptState.request++;
+  $('job-detail').hidden=true;$('transcript').hidden=true;$('result').hidden=true;
+}
+function deleteJob(job){
+  confirmation(`Удалить обработку «${job.title}»? Будут безвозвратно удалены её индекс, расшифровка, кадры и журнал на хосте. Исходное видео не удаляется.`, 'Удалить обработку', async()=>{
+    await api('/api/delete-job',{id:job.id});clearDeletedJob(job.id);jobsSnapshot='';await refreshJobs();$('index-path').focus();status('Обработка удалена с хоста. Исходное видео осталось без изменений.');
+  });
+}
 async function checkSetup(){
   const data=await api('/api/readiness');configureOcr(data.ocr);$('environment').textContent=`${data.system} ${data.machine} · Python ${data.python} · ${data.isolated?'Изолированное окружение':'Системный Python — рекомендуется .venv'} · ${data.environment}`;$('gpu').textContent=data.gpu;
   $('dependencies').replaceChildren(...data.items.map(item=>{
@@ -135,7 +146,7 @@ function renderJobProgress(job){
 }
 async function refreshJobs(){
   if(state.stopped)return;const jobs=await api('/api/jobs'),snapshot=JSON.stringify(jobs);
-  if(snapshot!==jobsSnapshot){jobsSnapshot=snapshot;$('jobs').replaceChildren(...jobs.map(j=>{const box=element('article',undefined,'card');box.append(element('h2',j.title),element('p',`${labels[j.state]||j.state} · ${new Date(j.created*1000).toLocaleString('ru-RU')}`),button('Открыть обработку',()=>selectJob(j.id)));return box;}));if(!jobs.length)$('jobs').append(element('p','Пока нет обработок. Добавь первое видео.'));}
+  if(snapshot!==jobsSnapshot){jobsSnapshot=snapshot;$('jobs').replaceChildren(...jobs.map(j=>{const box=element('article',undefined,'card'),actions=element('div',undefined,'row');actions.append(button('Открыть обработку',()=>selectJob(j.id)));const remove=button('Удалить обработку',()=>deleteJob(j));remove.className='danger';remove.disabled=['running','cancelling'].includes(j.state);actions.append(remove);box.append(element('h2',j.title),element('p',`${labels[j.state]||j.state} · ${new Date(j.created*1000).toLocaleString('ru-RU')}`),actions);return box;}));if(!jobs.length)$('jobs').append(element('p','Пока нет обработок. Добавь первое видео.'));}
   if(state.job){
     const selected=state.job,j=await api('/api/job?'+new URLSearchParams({id:selected}));if(state.job!==selected)return;
     $('job-title').textContent=j.title;$('job-state').textContent=labels[j.state]||j.state;renderJobProgress(j);$('resources').textContent=j.resources;$('job-log').textContent=j.log||'Ожидаем вывод процесса…';$('cancel-job').disabled=!['running','cancelling'].includes(j.state);
