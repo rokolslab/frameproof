@@ -24,3 +24,4 @@ def test_web_document_preserves_explicit_frame_gate():
     assert "type=\"search\"" in page
     script = (Path(__file__).parents[1] / "frameproof" / "assets" / "web" / "app.js").read_text(encoding="utf-8")
     assert "compositionstart" in script
+    assert "configureOcr" in script

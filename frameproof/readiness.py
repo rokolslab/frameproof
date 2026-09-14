@@ -9,6 +9,26 @@ import sys
 from .installers import PIP, WINGET, refresh_path
 
 
+def ocr_options(system: str):
+    """Return the OCR choices that can run on this operating system.
+
+    The browser must not offer an engine that the host can never execute.  Keep
+    the labels beside the host capability instead of guessing the browser OS:
+    the browser may be connected through an SSH tunnel.
+    """
+    choices = {
+        "Windows": [
+            {"id": "windows", "label": "Windows OCR"},
+            {"id": "tesseract", "label": "Tesseract"},
+        ],
+        "Darwin": [
+            {"id": "vision", "label": "Apple Vision OCR"},
+            {"id": "tesseract", "label": "Tesseract"},
+        ],
+    }.get(system, [{"id": "tesseract", "label": "Tesseract"}])
+    return {"default": choices[0]["id"], "options": choices}
+
+
 def module_exists(name):
     try:
         return importlib.util.find_spec(name) is not None
@@ -180,5 +200,6 @@ def readiness():
         "gpu": "NVIDIA utility обнаружена; совместимость движка ещё не проверена"
         if shutil.which("nvidia-smi")
         else "GPU не проверена. Автовыбор устройства выполняется движком при обработке.",
+        "ocr": ocr_options(system),
         "items": items,
     }

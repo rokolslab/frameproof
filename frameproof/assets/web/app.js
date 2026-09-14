@@ -5,6 +5,15 @@ const labels = {running:'Обработка выполняется',done:'Гот
 function element(tag, text, className) { const node=document.createElement(tag); if(text!==undefined)node.textContent=text; if(className)node.className=className; return node; }
 function button(text, action) { const node=element('button',text);node.type='button';node.addEventListener('click',()=>run(action));return node; }
 function status(text) { $('status').textContent=text; }
+function configureOcr(ocr) {
+  if (!ocr?.options?.length) return;
+  const select=$('ocr');
+  select.replaceChildren(...ocr.options.map(option=>{
+    const node=element('option',option.label);node.value=option.id;return node;
+  }));
+  select.value=ocr.default;
+  select.disabled=false;
+}
 async function run(action) {try {await action();} catch(error){status(error.message);}}
 async function api(path, body, signal) {
   const controller = new AbortController();
@@ -28,7 +37,7 @@ $('confirm-no').addEventListener('click',()=>$('confirm-dialog').close());
 $('shutdown').addEventListener('click',()=>confirmation('Приложение перестанет отвечать в браузере. Сохранённые результаты останутся на хосте. Активную обработку сначала нужно остановить.','Завершить',async()=>{await api('/api/shutdown',{});state.stopped=true;status('Приложение завершено. Для новой работы запусти его на хосте.');document.querySelectorAll('button,input,select').forEach(n=>n.disabled=true);}));
 $('cancel-job').addEventListener('click',()=>confirmation('Текущая обработка будет остановлена вместе с дочерними процессами. Частичный результат не считается готовым.','Остановить',async()=>{await api('/api/cancel',{});await refreshJobs();}));
 async function checkSetup(){
-  const data=await api('/api/readiness');$('environment').textContent=`${data.system} ${data.machine} · Python ${data.python} · ${data.isolated?'Изолированное окружение':'Системный Python — рекомендуется .venv'} · ${data.environment}`;$('gpu').textContent=data.gpu;
+  const data=await api('/api/readiness');configureOcr(data.ocr);$('environment').textContent=`${data.system} ${data.machine} · Python ${data.python} · ${data.isolated?'Изолированное окружение':'Системный Python — рекомендуется .venv'} · ${data.environment}`;$('gpu').textContent=data.gpu;
   $('dependencies').replaceChildren(...data.items.map(item=>{
     const ready=item.ready??item.installed,box=element('article',undefined,'card dependency'+(ready?'':' missing'));
     box.append(element('h2',item.name),element('p',ready?'Готов':item.installed?'Установлен, требуется настройка':'Не установлен'),element('p',item.detail||item.purpose));

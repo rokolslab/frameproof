@@ -385,9 +385,24 @@ def test_windows_and_apple_readiness(monkeypatch):
     data = ready.readiness()
     assert data["recommended_engine"] == "mlx"
     assert {"mlx", "vision"} <= {x["id"] for x in data["items"]}
+    assert data["ocr"]["default"] == "vision"
+    assert [item["id"] for item in data["ocr"]["options"]] == ["vision", "tesseract"]
     monkeypatch.setattr(ready.platform, "system", lambda: "Windows")
     data = ready.readiness()
     assert any(x["id"] == "windows" and "winsdk" in x["command"] for x in data["items"])
+    assert data["ocr"]["default"] == "windows"
+    assert [item["id"] for item in data["ocr"]["options"]] == ["windows", "tesseract"]
+
+
+def test_linux_readiness_exposes_only_tesseract_for_ocr(monkeypatch):
+    import frameproof.readiness as ready
+
+    monkeypatch.setattr(ready.platform, "system", lambda: "Linux")
+    data = ready.readiness()
+    assert data["ocr"] == {
+        "default": "tesseract",
+        "options": [{"id": "tesseract", "label": "Tesseract"}],
+    }
 
 
 def test_windows_install_command_with_call_operator(monkeypatch):

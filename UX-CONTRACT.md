@@ -61,6 +61,10 @@ in the browser requires checking status before retry. Manual commands/links rema
 User PATH is appended, not replaced; Tesseract language data is per-user. No driver
 changes. First speech use can download model weights. Platform OCR languages and
 GPU runtime compatibility require real processing tests on the destination host.
+The OCR select is populated from the host's readiness response, not from the
+browser's operating system: Windows defaults to Windows OCR and also offers
+Tesseract; macOS defaults to Apple Vision OCR and also offers Tesseract; Linux
+offers and defaults to Tesseract. An unavailable platform engine is not shown.
 Search is bounded to 200 displayed matches with explicit load-more; file browser
 uses pages of 100. Query is not placed in URL due to transcript privacy. No form
 reset on failure or section change. CLI stderr is retained as job diagnostics.

@@ -231,7 +231,8 @@ class Application:
         ):
             missing.append("движок речи (или выберите субтитры / отключите речь)")
         ocr = body.get("ocr", "off")
-        if ocr not in ("off", "vision", "windows", "tesseract"):
+        available_ocr = {option["id"] for option in report.get("ocr", {}).get("options", [])}
+        if ocr != "off" and ocr not in available_ocr:
             raise ValueError("Неизвестный OCR-движок.")
         if ocr != "off":
             if not present.get(ocr):

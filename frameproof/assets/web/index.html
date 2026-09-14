@@ -41,7 +41,7 @@
           <label for="subs-file">Готовые субтитры с компьютера браузера</label><input type="file" id="subs-file" accept=".srt,.vtt,.json3">
           <label for="subs-path">Или субтитры на хосте</label><div class="row"><input id="subs-path" placeholder="Необязательно"><button disabled type="button" id="browse-subs">Выбрать субтитры</button></div>
           <p class="hint">Готовые субтитры заменяют распознавание речи. Выбирай один источник субтитров.</p>
-          <label for="ocr">Текст на экране (OCR)</label><select id="ocr"><option value="off">Не распознавать</option><option value="windows">Windows OCR</option><option value="vision">Apple Vision — macOS</option><option value="tesseract">Tesseract — Windows / Linux / macOS</option></select>
+          <label for="ocr">Текст на экране (OCR)</label><select id="ocr" disabled><option>Определяем доступный OCR…</option></select>
           <p class="hint">OCR помогает искать команды и надписи. Он не подтверждает содержание кадра: изображение нужно открыть.</p>
         </section>
       </div>
